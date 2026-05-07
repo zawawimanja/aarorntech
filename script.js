@@ -53,15 +53,23 @@ const leaveForm = document.getElementById('leaveForm');
 
 // Initialize
 async function init() {
-    await fetchUserData();
+    console.log("Portal Initializing...");
+    try {
+        await fetchUserData();
+    } catch (e) {
+        console.error("Initialization error:", e);
+        userData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
+        updateUI();
+    }
     
     // Set current date
     const now = new Date('2026-05-07');
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    currentDateEl.textContent = now.toLocaleDateString('en-US', options);
+    if (currentDateEl) currentDateEl.textContent = now.toLocaleDateString('en-US', options);
 
     renderHolidays();
     calculateTenure();
+    console.log("Portal Ready.");
 }
 
 async function fetchUserData() {
