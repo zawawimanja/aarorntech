@@ -1,6 +1,6 @@
 // Supabase Configuration
 const SUPABASE_URL = 'https://zrtbhkjqpivojwwsicwn.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_NM-SZ8pV2fl19Ee1C0eCZg_anEYKtjv'; // Updated key
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpydGJoa2pxcGl2b2p3d3NpY3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMzM1MDUsImV4cCI6MjA5MzcwOTUwNX0.iVf0OxsY0cF9Y14SPvAiZ0oZSD6yDTIL2G1X_wgDTPM'; // Correct Anon Key
 const supabase = typeof supabase !== 'undefined' ? supabase : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const USER_ID = 'aarorn_user_01'; // Hardcoded for personal use without auth
