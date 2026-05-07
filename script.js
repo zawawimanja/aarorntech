@@ -210,11 +210,9 @@ function renderHolidays() {
         .slice(0, 4);
     holidayListEl.innerHTML = upcoming.map(h => {
         const d = new Date(h.date);
-        return `<div class="stat-card" style="margin-bottom:0.75rem; padding:1rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-weight:600;">${h.name}</span>
-                <span style="font-size:0.8rem; color:var(--accent);">${d.toLocaleDateString('en-US', {month:'short', day:'2-digit'})} (${d.toLocaleDateString('en-US', {weekday:'short'})})</span>
-            </div>
+        return `<div class="holiday-item">
+            <span style="font-size: 0.875rem; font-weight: 500; color: var(--md-on-surface);">${h.name}</span>
+            <span style="font-size: 0.75rem; font-weight: 700; color: var(--md-primary); background: var(--md-primary-container); padding: 0.25rem 0.6rem; border-radius: 99px;">${d.toLocaleDateString('en-US', {month:'short', day:'2-digit'})}</span>
         </div>`;
     }).join('');
 }
