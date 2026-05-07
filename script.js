@@ -213,7 +213,28 @@ leaveForm.addEventListener('submit', (e) => {
     leaveForm.reset();
 });
 
-function openModal() { leaveModal.style.display = 'flex'; }
-function closeModal() { leaveModal.style.display = 'none'; }
+function openModal() { 
+    leaveModal.style.display = 'flex'; 
+}
+function closeModal() { 
+    leaveModal.style.display = 'none'; 
+}
 window.onclick = (e) => { if (e.target == leaveModal) closeModal(); }
+
+// Initialize Flatpickr date pickers
+const startPicker = flatpickr("#startDate", {
+    dateFormat: "Y-m-d",
+    minDate: "today",
+    disableMobile: true,
+    onChange: function(selectedDates) {
+        endPicker.set("minDate", selectedDates[0]);
+    }
+});
+
+const endPicker = flatpickr("#endDate", {
+    dateFormat: "Y-m-d",
+    minDate: "today",
+    disableMobile: true
+});
+
 init();

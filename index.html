@@ -6,7 +6,10 @@
     <title>Employee Portal | Leave Dashboard</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 </head>
 <body>
     <!-- Sidebar -->
@@ -156,11 +159,11 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label>Start Date</label>
-                        <input type="date" id="startDate" required>
+                        <input type="text" id="startDate" placeholder="Select start date" required readonly>
                     </div>
                     <div class="form-group">
                         <label>End Date</label>
-                        <input type="date" id="endDate" required>
+                        <input type="text" id="endDate" placeholder="Select end date" required readonly>
                     </div>
                 </div>
                 <div class="form-group">
