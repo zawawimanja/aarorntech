@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 </head>
@@ -17,21 +16,21 @@
     <!-- Sidebar -->
     <nav class="sidebar">
         <div class="logo">
-            <i class="fas fa-rocket"></i>
-            <span>My Portal</span>
+            <i class="fas fa-layers"></i>
+            <span>Leave Portal</span>
         </div>
         <ul class="nav-links">
-            <li><a href="#" class="active"><i class="fas fa-chart-pie"></i> Dashboard</a></li>
+            <li><a href="#" class="active"><i class="fas fa-home"></i> Dashboard</a></li>
             <li><a href="#"><i class="fas fa-calendar-alt"></i> My Leave</a></li>
-            <li><a href="#"><i class="fas fa-file-invoice-dollar"></i> Payslips</a></li>
-            <li><a href="#"><i class="fas fa-bullhorn"></i> Announcements</a></li>
-            <li><a href="#"><i class="fas fa-user-circle"></i> Profile</a></li>
+            <li><a href="#"><i class="fas fa-receipt"></i> Payslips</a></li>
+            <li><a href="#"><i class="fas fa-bell"></i> Announcements</a></li>
+            <li><a href="#"><i class="fas fa-person"></i> Profile</a></li>
         </ul>
-        <div class="user-profile" style="margin-top: auto; cursor: pointer;">
+        <div class="user-profile">
             <div class="avatar">AA</div>
             <div class="user-info">
-                <div style="font-size: 0.9rem; font-weight: 600;">Employee</div>
-                <div style="font-size: 0.75rem; color: var(--text-dim);">Employee ID: 8892</div>
+                <div style="font-size: 0.85rem; font-weight: 700; color: var(--md-on-surface);">Employee</div>
+                <div style="font-size: 0.75rem; color: var(--md-on-surface-variant);">ID: 8892</div>
             </div>
         </div>
     </nav>
@@ -40,45 +39,54 @@
     <main class="main-content">
         <header class="animate-fade">
             <div>
-                <h1>Welcome Back! 👋</h1>
-                <p style="color: var(--text-dim); margin-top: 0.4rem; font-size: 0.9rem;">Track your leave, stay on top of holidays.</p>
+                <h1>Good day! <span>👋</span></h1>
+                <p style="color: var(--md-on-surface-variant); margin-top: 0.3rem; font-size: 0.875rem;">Here's your leave summary for today.</p>
             </div>
-            <div id="current-date" style="text-align: right; font-size: 0.85rem; font-weight: 500; color: var(--text-dim); background: var(--glass-bg); border: 1px solid var(--glass-border); padding: 0.6rem 1rem; border-radius: 10px;"></div>
+            <div class="md-chip">
+                <i class="fas fa-calendar" style="color: var(--md-primary); font-size: 0.8rem;"></i>
+                <span id="current-date"></span>
+            </div>
         </header>
 
         <!-- Stats Grid -->
         <div class="dashboard-grid">
             <div class="stat-card mc animate-fade" style="animation-delay: 0.1s;">
-                <div class="label"><i class="fas fa-hand-holding-medical" style="color: var(--accent);"></i> Medical Leave (MC)</div>
+                <div class="label"><i class="fas fa-hand-holding-medical"></i> Medical Leave (MC)</div>
                 <div class="value" id="mc-balance">17</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">Days remaining</div>
+                <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Days remaining</div>
             </div>
+
             <div class="stat-card el animate-fade" style="animation-delay: 0.2s;">
-                <div class="label"><i class="fas fa-umbrella-beach" style="color: var(--success);"></i> Earned Leave (EL)</div>
+                <div class="label"><i class="fas fa-umbrella-beach"></i> Earned Leave (EL)</div>
                 <div class="value" id="el-balance">4.5</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">Days remaining / 12 total</div>
-                <div style="margin-top: 0.75rem; background: rgba(255,255,255,0.1); border-radius: 99px; height: 6px;">
-                    <div id="el-progress-bar" style="height: 6px; border-radius: 99px; background: var(--success); width: 37.5%; transition: width 0.5s ease;"></div>
+                <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Days remaining / 12 total</div>
+                <div class="md-progress" style="margin-top: 0.75rem;">
+                    <div class="md-progress-fill" id="el-progress-bar" style="width: 37%;"></div>
                 </div>
             </div>
-            <div class="stat-card animate-fade" style="animation-delay: 0.3s; border-left: 4px solid var(--secondary);">
-                <div class="label"><i class="fas fa-user-clock" style="color: var(--secondary);"></i> Length of Service</div>
-                <div class="value" id="service-tenure">Calculating...</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">Since Mar 14, 2024</div>
+
+            <div class="stat-card animate-fade" style="animation-delay: 0.3s; border-top: 4px solid var(--md-tertiary);">
+                <div class="label" style="color: var(--md-tertiary);"><i class="fas fa-user-clock"></i> Length of Service</div>
+                <div class="value" id="service-tenure" style="font-size: 1.6rem; color: var(--md-tertiary);">--</div>
+                <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Since Mar 14, 2024</div>
             </div>
-            <div class="stat-card animate-fade" style="animation-delay: 0.5s;">
-                <div class="label"><i class="fas fa-calendar-check" style="color: var(--primary);"></i> Public Holidays</div>
-                <div class="value">2</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">Coming this month</div>
+
+            <div class="stat-card animate-fade" style="animation-delay: 0.4s; border-top: 4px solid var(--md-warning);">
+                <div class="label" style="color: #b06000;"><i class="fas fa-calendar-check"></i> Public Holidays</div>
+                <div class="value" style="color: var(--md-warning);">2</div>
+                <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Coming this month</div>
             </div>
         </div>
 
-        <!-- History & Announcements -->
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+        <!-- Main Layout -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
+            <!-- Leave History -->
             <section class="animate-fade" style="animation-delay: 0.5s;">
                 <div class="section-title">
                     <h2>Leave History</h2>
-                    <button class="btn-primary" onclick="openModal()">+ Apply Leave</button>
+                    <button class="btn-primary" onclick="openModal()">
+                        <i class="fas fa-plus"></i> Apply Leave
+                    </button>
                 </div>
                 <div class="card-table">
                     <table>
@@ -90,59 +98,27 @@
                                 <th>Status</th>
                             </tr>
                         </thead>
-                        <tbody id="history-body">
-                            <tr>
-                                <td>Earned Leave</td>
-                                <td>Apr 12 - Apr 15, 2026</td>
-                                <td>3.0</td>
-                                <td><span class="status-badge status-approved">Approved</span></td>
-                            </tr>
-                            <tr>
-                                <td>Medical Leave</td>
-                                <td>Mar 02, 2026</td>
-                                <td>1.0</td>
-                                <td><span class="status-badge status-approved">Approved</span></td>
-                            </tr>
-                        </tbody>
+                        <tbody id="history-body"></tbody>
                     </table>
                 </div>
             </section>
 
+            <!-- Right Sidebar -->
             <section class="animate-fade" style="animation-delay: 0.6s;">
                 <div class="section-title">
                     <h2>Upcoming Holidays</h2>
-                    <a href="PUBLIC HOLIDAYS FOR YEAR 2026.pdf" target="_blank" style="font-size: 0.8rem; color: var(--primary); text-decoration: none;"><i class="fas fa-file-pdf"></i> View PDF</a>
+                    <a href="PUBLIC HOLIDAYS FOR YEAR 2026.pdf" target="_blank" style="font-size: 0.75rem; color: var(--md-primary); text-decoration: none; font-weight: 600;">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </a>
                 </div>
-                <div id="holiday-list">
-                    <!-- Dynamic Holidays -->
-                    <div class="stat-card" style="margin-bottom: 0.75rem; padding: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 600;">Hari Raya Qurban</span>
-                            <span style="font-size: 0.8rem; color: var(--accent);">May 27 (Wed)</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" style="margin-bottom: 0.75rem; padding: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 600;">Agong's Birthday</span>
-                            <span style="font-size: 0.8rem; color: var(--accent);">Jun 01 (Mon)</span>
-                        </div>
-                    </div>
-                    <div class="stat-card" style="margin-bottom: 0.75rem; padding: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-weight: 600;">Awal Muharram</span>
-                            <span style="font-size: 0.8rem; color: var(--accent);">Jun 17 (Wed)</span>
-                        </div>
-                    </div>
-                </div>
+                <div id="holiday-list"></div>
 
-                <div class="section-title" style="margin-top: 2rem;">
+                <div class="section-title" style="margin-top: 1.5rem;">
                     <h2>Announcements</h2>
                 </div>
-                <div class="stat-card" style="margin-bottom: 1rem;">
-                    <div style="font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">
-                        <i class="fas fa-info-circle" style="color: var(--primary);"></i> Performance Review
-                    </div>
-                    <p style="font-size: 0.8rem; color: var(--text-dim);">Annual review period starts Monday. Update your KPIs.</p>
+                <div class="announce-card">
+                    <div class="announce-title"><i class="fas fa-info-circle"></i> Performance Review</div>
+                    <p>Annual review period starts Monday. Update your KPIs.</p>
                 </div>
             </section>
         </div>
@@ -151,7 +127,7 @@
     <!-- Apply Leave Modal -->
     <div class="modal-overlay" id="leaveModal">
         <div class="modal-content">
-            <h2 style="margin-bottom: 1.5rem;">Apply for Leave</h2>
+            <h2>Apply for Leave</h2>
             <form id="leaveForm">
                 <div class="form-group">
                     <label>Leave Type</label>
@@ -164,21 +140,21 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label>Start Date</label>
-                        <input type="text" id="startDate" placeholder="Select start date" required readonly>
+                        <input type="text" id="startDate" placeholder="Select date" required readonly>
                     </div>
                     <div class="form-group">
                         <label>End Date</label>
-                        <input type="text" id="endDate" placeholder="Select end date" required readonly>
+                        <input type="text" id="endDate" placeholder="Select date" required readonly>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Reason (Optional)</label>
                     <textarea id="reason" rows="3" placeholder="Brief reason..."></textarea>
                 </div>
-                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
-                    <button type="button" class="btn-primary" style="background: var(--surface); color: var(--text-main);" onclick="closeModal()">Cancel</button>
-                    <button type="reset" class="btn-primary" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger);">Reset</button>
-                    <button type="submit" class="btn-primary" style="flex-grow: 1;">Submit Request</button>
+                <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem; justify-content: flex-end;">
+                    <button type="button" class="btn-primary" style="background: none; color: var(--md-primary); box-shadow: none;" onclick="closeModal()">Cancel</button>
+                    <button type="reset" class="btn-primary" style="background: none; color: var(--md-error); box-shadow: none;">Reset</button>
+                    <button type="submit" class="btn-primary">Submit</button>
                 </div>
             </form>
         </div>
