@@ -136,6 +136,13 @@ async function saveToSupabase(dataToSave) {
 function updateUI(shouldSave = true) {
     if (mcBalanceEl) mcBalanceEl.textContent = userData.balances.mc;
     if (elBalanceEl) elBalanceEl.textContent = userData.balances.el;
+
+    // Update EL progress bar (out of 12 total)
+    const elProgressBar = document.getElementById('el-progress-bar');
+    if (elProgressBar) {
+        const pct = Math.min((userData.balances.el / 12) * 100, 100);
+        elProgressBar.style.width = pct + '%';
+    }
     
     if (historyBody) {
         historyBody.innerHTML = userData.history.map((item, index) => `

@@ -54,7 +54,10 @@
             <div class="stat-card el animate-fade" style="animation-delay: 0.2s;">
                 <div class="label"><i class="fas fa-umbrella-beach" style="color: var(--success);"></i> Earned Leave (EL)</div>
                 <div class="value" id="el-balance">4.5</div>
-                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">Days remaining</div>
+                <div style="font-size: 0.8rem; color: var(--text-dim); margin-top: 0.5rem;">Days remaining / 12 total</div>
+                <div style="margin-top: 0.75rem; background: rgba(255,255,255,0.1); border-radius: 99px; height: 6px;">
+                    <div id="el-progress-bar" style="height: 6px; border-radius: 99px; background: var(--success); width: 37.5%; transition: width 0.5s ease;"></div>
+                </div>
             </div>
             <div class="stat-card animate-fade" style="animation-delay: 0.3s; border-left: 4px solid var(--secondary);">
                 <div class="label"><i class="fas fa-user-clock" style="color: var(--secondary);"></i> Length of Service</div>
