@@ -2,12 +2,12 @@
 const SUPABASE_URL = 'https://zrtbhkjqpivojwwsicwn.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpydGJoa2pxcGl2b2p3d3NpY3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMzM1MDUsImV4cCI6MjA5MzcwOTUwNX0.iVf0OxsY0cF9Y14SPvAiZ0oZSD6yDTIL2G1X_wgDTPM'; 
 
-let supabase;
+let supabaseClient;
 try {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     console.log("Supabase client initialized.");
 } catch (e) {
-    console.error("Failed to initialize Supabase client. Check CDN link or credentials.", e);
+    console.error("Failed to initialize Supabase client.", e);
 }
 
 const USER_ID = 'aarorn_user_01';
@@ -58,7 +58,7 @@ const leaveForm = document.getElementById('leaveForm');
 async function init() {
     console.log("Portal Initializing...");
     try {
-        if (supabase) {
+        if (supabaseClient) {
             await fetchUserData();
         } else {
             throw new Error("Supabase not available");
@@ -81,7 +81,7 @@ async function init() {
 }
 
 async function fetchUserData() {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
         .from('profiles')
         .select('*')
         .eq('id', USER_ID)
@@ -107,8 +107,8 @@ async function fetchUserData() {
 }
 
 async function saveToSupabase(dataToSave) {
-    if (!supabase) return;
-    const { error } = await supabase
+    if (!supabaseClient) return;
+    const { error } = await supabaseClient
         .from('profiles')
         .upsert({
             id: USER_ID,
