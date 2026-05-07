@@ -11,11 +11,13 @@ try {
 }
 
 const USER_ID = 'aarorn_user_01';
+const EL_ANNUAL = 12; // Total annual EL entitlement
 
-// Initial Data
+// Default data
 const defaultData = {
     joinDate: '2024-03-14',
-    balances: { mc: 17, el: 4.5, cl: 5 },
+    balances: { mc: 17, cl: 5 },
+    el_taken: 0, // EL days used; balance is calculated dynamically
     history: [
         { type: 'Earned Leave', dates: 'Apr 12 - Apr 15, 2026', days: 3.0, status: 'Approved' },
         { type: 'Medical Leave', dates: 'Mar 02, 2026', days: 1.0, status: 'Approved' }
@@ -44,7 +46,7 @@ const holidays2026 = [
     { name: "Christmas Day", date: "2026-12-25" }
 ];
 
-let userData = defaultData;
+let userData = { ...defaultData };
 
 // DOM Elements
 const mcBalanceEl = document.getElementById('mc-balance');
@@ -53,6 +55,21 @@ const historyBody = document.getElementById('history-body');
 const currentDateEl = document.getElementById('current-date');
 const leaveModal = document.getElementById('leaveModal');
 const leaveForm = document.getElementById('leaveForm');
+
+// --- Auto EL Accrual ---
+// Calculates EL earned so far this year: 1 day per completed month + 0.5 for partial month
+function calculateELEarned() {
+    const now = new Date();
+    const monthsCompleted = now.getMonth(); // 0=Jan, 4=May → 4 completed months
+    const partial = now.getDate() >= 15 ? 1.0 : 0.5; // First half = 0.5, second half = 1.0
+    return Math.min(monthsCompleted + partial, EL_ANNUAL);
+}
+
+function getELRemaining() {
+    const earned = calculateELEarned();
+    const remaining = parseFloat((earned - (userData.el_taken || 0)).toFixed(1));
+    return Math.max(remaining, 0);
+}
 
 // Initialize
 async function init() {
@@ -64,19 +81,20 @@ async function init() {
             throw new Error("Supabase not available");
         }
     } catch (e) {
-        console.warn("Supabase Fetch Failed, using local storage:", e);
-        userData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
+        console.warn("Supabase Fetch Failed, using defaults:", e);
+        userData = { ...defaultData };
         updateUI(false);
     }
-    
-    // Set current date
-    const now = new Date('2026-05-07');
+
+    // Set current date (real time)
+    const now = new Date();
     if (currentDateEl) {
         currentDateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     }
 
     renderHolidays();
     calculateTenure();
+    console.log(`EL Earned: ${calculateELEarned()}, EL Taken: ${userData.el_taken}, EL Remaining: ${getELRemaining()}`);
     console.log("Portal Ready.");
 }
 
@@ -89,31 +107,23 @@ async function fetchUserData() {
 
     if (error) {
         if (error.code === 'PGRST116') {
-            // No profile found, create a fresh one with correct defaults
             console.log("No profile found, seeding with defaults...");
-            userData = defaultData;
+            userData = { ...defaultData };
             await saveToSupabase(userData);
         } else {
             throw error;
         }
     } else if (data) {
-        // Validate data - if balances are null/undefined, reset to defaults
-        if (data.mc_balance === null || data.mc_balance === undefined || data.el_balance === null) {
-            console.warn("Invalid data in DB, resetting to defaults...");
-            userData = defaultData;
-            await saveToSupabase(userData);
-        } else {
-            console.log("Data loaded from Supabase:", data);
-            userData = {
-                joinDate: data.join_date || defaultData.joinDate,
-                balances: {
-                    mc: parseFloat(data.mc_balance) || defaultData.balances.mc,
-                    el: parseFloat(data.el_balance) || defaultData.balances.el,
-                    cl: parseFloat(data.cl_balance) || defaultData.balances.cl
-                },
-                history: data.leave_history || []
-            };
-        }
+        console.log("Data loaded from Supabase:", data);
+        userData = {
+            joinDate: data.join_date || defaultData.joinDate,
+            balances: {
+                mc: parseFloat(data.mc_balance) || defaultData.balances.mc,
+                cl: parseFloat(data.cl_balance) || defaultData.balances.cl
+            },
+            el_taken: parseFloat(data.el_taken) || 0,
+            history: data.leave_history || []
+        };
     }
     updateUI(false);
 }
@@ -126,24 +136,27 @@ async function saveToSupabase(dataToSave) {
             id: USER_ID,
             join_date: dataToSave.joinDate,
             mc_balance: dataToSave.balances.mc,
-            el_balance: dataToSave.balances.el,
             cl_balance: dataToSave.balances.cl,
+            el_taken: dataToSave.el_taken || 0,
             leave_history: dataToSave.history
         });
     if (error) console.error("Save failed:", error);
 }
 
 function updateUI(shouldSave = true) {
+    const elRemaining = getELRemaining();
+    const elEarned = calculateELEarned();
+
     if (mcBalanceEl) mcBalanceEl.textContent = userData.balances.mc;
-    if (elBalanceEl) elBalanceEl.textContent = userData.balances.el;
+    if (elBalanceEl) elBalanceEl.textContent = elRemaining;
 
     // Update EL progress bar (out of 12 total)
     const elProgressBar = document.getElementById('el-progress-bar');
     if (elProgressBar) {
-        const pct = Math.min((userData.balances.el / 12) * 100, 100);
+        const pct = Math.min((elRemaining / EL_ANNUAL) * 100, 100);
         elProgressBar.style.width = pct + '%';
     }
-    
+
     if (historyBody) {
         historyBody.innerHTML = userData.history.map((item, index) => `
             <tr>
@@ -159,7 +172,6 @@ function updateUI(shouldSave = true) {
     }
 
     if (shouldSave) {
-        localStorage.setItem('aarornPortalData', JSON.stringify(userData));
         saveToSupabase(userData);
     }
 }
@@ -167,15 +179,18 @@ function updateUI(shouldSave = true) {
 async function deleteLeave(index) {
     if (!confirm('Delete this leave and restore balance?')) return;
     const item = userData.history[index];
-    if (item.type === 'Earned Leave') userData.balances.el += item.days;
-    else if (item.type === 'Medical Leave') userData.balances.mc += item.days;
+    if (item.type === 'Earned Leave') {
+        userData.el_taken = Math.max(0, (userData.el_taken || 0) - item.days);
+    } else if (item.type === 'Medical Leave') {
+        userData.balances.mc += item.days;
+    }
     userData.history.splice(index, 1);
     updateUI();
 }
 
 function calculateTenure() {
     const joinDate = new Date(userData.joinDate);
-    const now = new Date('2026-05-07');
+    const now = new Date();
     let years = now.getFullYear() - joinDate.getFullYear();
     let months = now.getMonth() - joinDate.getMonth();
     let days = now.getDate() - joinDate.getDate();
@@ -188,7 +203,11 @@ function calculateTenure() {
 function renderHolidays() {
     const holidayListEl = document.getElementById('holiday-list');
     if (!holidayListEl) return;
-    const upcoming = holidays2026.filter(h => new Date(h.date) >= new Date('2026-05-01')).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 4);
+    const now = new Date();
+    const upcoming = holidays2026
+        .filter(h => new Date(h.date) >= now)
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .slice(0, 4);
     holidayListEl.innerHTML = upcoming.map(h => {
         const d = new Date(h.date);
         return `<div class="stat-card" style="margin-bottom:0.75rem; padding:1rem;">
@@ -198,8 +217,6 @@ function renderHolidays() {
             </div>
         </div>`;
     }).join('');
-    const valEl = document.querySelector('.stat-card:nth-child(4) .value');
-    if (valEl) valEl.textContent = upcoming.length;
 }
 
 leaveForm.addEventListener('submit', (e) => {
@@ -208,24 +225,38 @@ leaveForm.addEventListener('submit', (e) => {
     const start = new Date(document.getElementById('startDate').value);
     const end = new Date(document.getElementById('endDate').value);
     const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
-    if (type === 'EL') { if (userData.balances.el >= diffDays) userData.balances.el -= diffDays; else { alert('Insufficient EL!'); return; } }
-    else if (type === 'MC') { if (userData.balances.mc >= diffDays) userData.balances.mc -= diffDays; else { alert('Insufficient MC!'); return; } }
+
+    if (type === 'EL') {
+        const remaining = getELRemaining();
+        if (remaining >= diffDays) {
+            userData.el_taken = (userData.el_taken || 0) + diffDays;
+        } else {
+            alert(`Insufficient EL! You have ${remaining} days remaining.`);
+            return;
+        }
+    } else if (type === 'MC') {
+        if (userData.balances.mc >= diffDays) {
+            userData.balances.mc -= diffDays;
+        } else {
+            alert(`Insufficient MC! You have ${userData.balances.mc} days remaining.`);
+            return;
+        }
+    }
+
     userData.history.unshift({
         type: type === 'EL' ? 'Earned Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave',
         dates: `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
-        days: diffDays, status: 'Approved'
+        days: diffDays,
+        status: 'Approved'
     });
+
     updateUI();
     closeModal();
     leaveForm.reset();
 });
 
-function openModal() { 
-    leaveModal.style.display = 'flex'; 
-}
-function closeModal() { 
-    leaveModal.style.display = 'none'; 
-}
+function openModal() { leaveModal.style.display = 'flex'; }
+function closeModal() { leaveModal.style.display = 'none'; }
 window.onclick = (e) => { if (e.target == leaveModal) closeModal(); }
 
 // Initialize Flatpickr date pickers
