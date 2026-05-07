@@ -89,19 +89,31 @@ async function fetchUserData() {
 
     if (error) {
         if (error.code === 'PGRST116') {
-            console.log("No profile found in DB, creating from local/default...");
-            userData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
+            // No profile found, create a fresh one with correct defaults
+            console.log("No profile found, seeding with defaults...");
+            userData = defaultData;
             await saveToSupabase(userData);
         } else {
             throw error;
         }
     } else if (data) {
-        console.log("Data loaded from Supabase.");
-        userData = {
-            joinDate: data.join_date,
-            balances: { mc: data.mc_balance, el: data.el_balance, cl: data.cl_balance },
-            history: data.leave_history || []
-        };
+        // Validate data - if balances are null/undefined, reset to defaults
+        if (data.mc_balance === null || data.mc_balance === undefined || data.el_balance === null) {
+            console.warn("Invalid data in DB, resetting to defaults...");
+            userData = defaultData;
+            await saveToSupabase(userData);
+        } else {
+            console.log("Data loaded from Supabase:", data);
+            userData = {
+                joinDate: data.join_date || defaultData.joinDate,
+                balances: {
+                    mc: parseFloat(data.mc_balance) || defaultData.balances.mc,
+                    el: parseFloat(data.el_balance) || defaultData.balances.el,
+                    cl: parseFloat(data.cl_balance) || defaultData.balances.cl
+                },
+                history: data.leave_history || []
+            };
+        }
     }
     updateUI(false);
 }
