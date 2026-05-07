@@ -1,25 +1,28 @@
 // Supabase Configuration
 const SUPABASE_URL = 'https://zrtbhkjqpivojwwsicwn.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpydGJoa2pxcGl2b2p3d3NpY3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMzM1MDUsImV4cCI6MjA5MzcwOTUwNX0.iVf0OxsY0cF9Y14SPvAiZ0oZSD6yDTIL2G1X_wgDTPM'; // Correct Anon Key
-const supabase = typeof supabase !== 'undefined' ? supabase : window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpydGJoa2pxcGl2b2p3d3NpY3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMzM1MDUsImV4cCI6MjA5MzcwOTUwNX0.iVf0OxsY0cF9Y14SPvAiZ0oZSD6yDTIL2G1X_wgDTPM'; 
 
-const USER_ID = 'aarorn_user_01'; // Hardcoded for personal use without auth
+let supabase;
+try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log("Supabase client initialized.");
+} catch (e) {
+    console.error("Failed to initialize Supabase client. Check CDN link or credentials.", e);
+}
+
+const USER_ID = 'aarorn_user_01';
 
 // Initial Data
 const defaultData = {
     joinDate: '2024-03-14',
-    balances: {
-        mc: 17,
-        el: 4.5,
-        cl: 5
-    },
+    balances: { mc: 17, el: 4.5, cl: 5 },
     history: [
         { type: 'Earned Leave', dates: 'Apr 12 - Apr 15, 2026', days: 3.0, status: 'Approved' },
         { type: 'Medical Leave', dates: 'Mar 02, 2026', days: 1.0, status: 'Approved' }
     ]
 };
 
-// Holidays from PDF
+// Holidays List
 const holidays2026 = [
     { name: "New Year's Day", date: "2026-01-01" },
     { name: "Federal Territory Day", date: "2026-02-01" },
@@ -55,17 +58,22 @@ const leaveForm = document.getElementById('leaveForm');
 async function init() {
     console.log("Portal Initializing...");
     try {
-        await fetchUserData();
+        if (supabase) {
+            await fetchUserData();
+        } else {
+            throw new Error("Supabase not available");
+        }
     } catch (e) {
-        console.error("Initialization error:", e);
+        console.warn("Supabase Fetch Failed, using local storage:", e);
         userData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
-        updateUI();
+        updateUI(false);
     }
     
     // Set current date
     const now = new Date('2026-05-07');
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    if (currentDateEl) currentDateEl.textContent = now.toLocaleDateString('en-US', options);
+    if (currentDateEl) {
+        currentDateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
 
     renderHolidays();
     calculateTenure();
@@ -73,40 +81,33 @@ async function init() {
 }
 
 async function fetchUserData() {
-    try {
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', USER_ID)
-            .single();
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', USER_ID)
+        .single();
 
-        if (error && error.code === 'PGRST116') {
-            // No user found, create one from localData or default
-            console.log("No profile found, creating one...");
-            const localData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
-            await saveToSupabase(localData);
-            userData = localData;
-        } else if (data) {
-            userData = {
-                joinDate: data.join_date,
-                balances: {
-                    mc: data.mc_balance,
-                    el: data.el_balance,
-                    cl: data.cl_balance
-                },
-                history: data.leave_history
-            };
+    if (error) {
+        if (error.code === 'PGRST116') {
+            console.log("No profile found in DB, creating from local/default...");
+            userData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
+            await saveToSupabase(userData);
+        } else {
+            throw error;
         }
-        updateUI(false); // Update UI but don't re-save to DB
-    } catch (err) {
-        console.error("Supabase Error:", err);
-        // Fallback to local storage if DB fails
-        userData = JSON.parse(localStorage.getItem('aarornPortalData')) || defaultData;
-        updateUI();
+    } else if (data) {
+        console.log("Data loaded from Supabase.");
+        userData = {
+            joinDate: data.join_date,
+            balances: { mc: data.mc_balance, el: data.el_balance, cl: data.cl_balance },
+            history: data.leave_history || []
+        };
     }
+    updateUI(false);
 }
 
 async function saveToSupabase(dataToSave) {
+    if (!supabase) return;
     const { error } = await supabase
         .from('profiles')
         .upsert({
@@ -117,25 +118,26 @@ async function saveToSupabase(dataToSave) {
             cl_balance: dataToSave.balances.cl,
             leave_history: dataToSave.history
         });
-    
-    if (error) console.error("Error saving to Supabase:", error);
+    if (error) console.error("Save failed:", error);
 }
 
 function updateUI(shouldSave = true) {
-    mcBalanceEl.textContent = userData.balances.mc;
-    elBalanceEl.textContent = userData.balances.el;
+    if (mcBalanceEl) mcBalanceEl.textContent = userData.balances.mc;
+    if (elBalanceEl) elBalanceEl.textContent = userData.balances.el;
     
-    historyBody.innerHTML = userData.history.map((item, index) => `
-        <tr>
-            <td>${item.type}</td>
-            <td>${item.dates}</td>
-            <td>${item.days.toFixed(1)}</td>
-            <td>
-                <span class="status-badge status-${item.status.toLowerCase()}">${item.status}</span>
-                <button onclick="deleteLeave(${index})" style="background:none; border:none; color:var(--danger); cursor:pointer; margin-left:10px;"><i class="fas fa-trash"></i></button>
-            </td>
-        </tr>
-    `).join('');
+    if (historyBody) {
+        historyBody.innerHTML = userData.history.map((item, index) => `
+            <tr>
+                <td>${item.type}</td>
+                <td>${item.dates}</td>
+                <td>${item.days.toFixed(1)}</td>
+                <td>
+                    <span class="status-badge status-${item.status.toLowerCase()}">${item.status}</span>
+                    <button onclick="deleteLeave(${index})" style="background:none; border:none; color:var(--danger); cursor:pointer; margin-left:10px;"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
 
     if (shouldSave) {
         localStorage.setItem('aarornPortalData', JSON.stringify(userData));
@@ -144,97 +146,56 @@ function updateUI(shouldSave = true) {
 }
 
 async function deleteLeave(index) {
-    if (!confirm('Are you sure you want to delete this leave request? The days will be added back to your balance.')) return;
-
+    if (!confirm('Delete this leave and restore balance?')) return;
     const item = userData.history[index];
-    
-    // Restore balance
-    if (item.type === 'Earned Leave') {
-        userData.balances.el += item.days;
-    } else if (item.type === 'Medical Leave') {
-        userData.balances.mc += item.days;
-    }
-
-    // Remove from history
+    if (item.type === 'Earned Leave') userData.balances.el += item.days;
+    else if (item.type === 'Medical Leave') userData.balances.mc += item.days;
     userData.history.splice(index, 1);
-    
     updateUI();
-    alert('Leave deleted and balance restored!');
 }
 
 function calculateTenure() {
     const joinDate = new Date(userData.joinDate);
     const now = new Date('2026-05-07');
-    
     let years = now.getFullYear() - joinDate.getFullYear();
     let months = now.getMonth() - joinDate.getMonth();
     let days = now.getDate() - joinDate.getDate();
-
-    if (days < 0) {
-        months--;
-        days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
-    }
-    if (months < 0) {
-        years--;
-        months += 12;
-    }
-
+    if (days < 0) { months--; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate(); }
+    if (months < 0) { years--; months += 12; }
     const tenureEl = document.getElementById('service-tenure');
-    if (tenureEl) {
-        tenureEl.textContent = `${years}Y ${months}M ${days}D`;
-    }
+    if (tenureEl) tenureEl.textContent = `${years}Y ${months}M ${days}D`;
 }
 
 function renderHolidays() {
     const holidayListEl = document.getElementById('holiday-list');
     if (!holidayListEl) return;
-
-    const upcomingHolidays = holidays2026
-        .filter(h => new Date(h.date) >= new Date('2026-05-01'))
-        .sort((a, b) => new Date(a.date) - new Date(b.date))
-        .slice(0, 4);
-    
-    holidayListEl.innerHTML = upcomingHolidays.map(h => {
-        const date = new Date(h.date);
-        return `
-            <div class="stat-card" style="margin-bottom: 0.75rem; padding: 1rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-weight: 600;">${h.name}</span>
-                    <span style="font-size: 0.8rem; color: var(--accent);">${date.toLocaleDateString('en-US', {month:'short', day:'2-digit'})} (${date.toLocaleDateString('en-US', {weekday:'short'})})</span>
-                </div>
+    const upcoming = holidays2026.filter(h => new Date(h.date) >= new Date('2026-05-01')).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 4);
+    holidayListEl.innerHTML = upcoming.map(h => {
+        const d = new Date(h.date);
+        return `<div class="stat-card" style="margin-bottom:0.75rem; padding:1rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:600;">${h.name}</span>
+                <span style="font-size:0.8rem; color:var(--accent);">${d.toLocaleDateString('en-US', {month:'short', day:'2-digit'})} (${d.toLocaleDateString('en-US', {weekday:'short'})})</span>
             </div>
-        `;
+        </div>`;
     }).join('');
-
-    const holidayValueEl = document.querySelector('.stat-card:nth-child(4) .value');
-    if (holidayValueEl) holidayValueEl.textContent = upcomingHolidays.length;
+    const valEl = document.querySelector('.stat-card:nth-child(4) .value');
+    if (valEl) valEl.textContent = upcoming.length;
 }
 
 leaveForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    
     const type = document.getElementById('leaveType').value;
     const start = new Date(document.getElementById('startDate').value);
     const end = new Date(document.getElementById('endDate').value);
-    
-    const diffTime = Math.abs(end - start);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    if (type === 'EL') {
-        if (userData.balances.el >= diffDays) userData.balances.el -= diffDays;
-        else { alert('Insufficient EL balance!'); return; }
-    } else if (type === 'MC') {
-        if (userData.balances.mc >= diffDays) userData.balances.mc -= diffDays;
-        else { alert('Insufficient MC balance!'); return; }
-    }
-
+    const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+    if (type === 'EL') { if (userData.balances.el >= diffDays) userData.balances.el -= diffDays; else { alert('Insufficient EL!'); return; } }
+    else if (type === 'MC') { if (userData.balances.mc >= diffDays) userData.balances.mc -= diffDays; else { alert('Insufficient MC!'); return; } }
     userData.history.unshift({
         type: type === 'EL' ? 'Earned Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave',
-        dates: `${start.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})} - ${end.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}`,
-        days: diffDays,
-        status: 'Approved'
+        dates: `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
+        days: diffDays, status: 'Approved'
     });
-
     updateUI();
     closeModal();
     leaveForm.reset();
@@ -243,5 +204,4 @@ leaveForm.addEventListener('submit', (e) => {
 function openModal() { leaveModal.style.display = 'flex'; }
 function closeModal() { leaveModal.style.display = 'none'; }
 window.onclick = (e) => { if (e.target == leaveModal) closeModal(); }
-
 init();
