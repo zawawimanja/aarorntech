@@ -15,8 +15,8 @@ const EL_ANNUAL = 12;
 
 // Default data
 const defaultData = {
-    joinDate: new Date().toISOString().split('T')[0],
-    balances: { mc: 14, cl: 3 },
+    joinDate: '2024-03-14',
+    balances: { mc: 17, cl: 5 },
     el_taken: 0,
     history: []
 };
@@ -157,7 +157,7 @@ async function init() {
 async function fetchUserData() {
     if (!USER_ID) return;
     
-    const { data, error } = await supabaseClient
+    let { data, error } = await supabaseClient
         .from('profiles')
         .select('*')
         .eq('id', USER_ID)
@@ -165,9 +165,31 @@ async function fetchUserData() {
 
     if (error) {
         if (error.code === 'PGRST116') {
-            console.log("No profile found for new user, seeding with defaults...");
-            userData = { ...defaultData };
-            await saveToSupabase(userData);
+            // Check for data migration from the old hardcoded ID
+            console.log("Checking for data to migrate from 'aarorn_user_01'...");
+            const { data: oldData, error: oldError } = await supabaseClient
+                .from('profiles')
+                .select('*')
+                .eq('id', 'aarorn_user_01')
+                .single();
+
+            if (!oldError && oldData) {
+                console.log("Migrating legacy data...");
+                userData = {
+                    joinDate: oldData.join_date || defaultData.joinDate,
+                    balances: {
+                        mc: parseFloat(oldData.mc_balance) || defaultData.balances.mc,
+                        cl: parseFloat(oldData.cl_balance) || defaultData.balances.cl
+                    },
+                    el_taken: parseFloat(oldData.el_taken) || 0,
+                    history: oldData.leave_history || []
+                };
+                await saveToSupabase(userData);
+            } else {
+                console.log("No legacy data, seeding with defaults...");
+                userData = { ...defaultData };
+                await saveToSupabase(userData);
+            }
         } else {
             throw error;
         }
@@ -182,6 +204,31 @@ async function fetchUserData() {
             el_taken: parseFloat(data.el_taken) || 0,
             history: data.leave_history || []
         };
+
+        // Special Fix: If user was accidentally seeded with MC 14 and has no history, 
+        // try migrating from legacy OR just fix the defaults.
+        if (userData.balances.mc === 14 && userData.history.length === 0) {
+            console.log("Detected accidental MC 14 seed. Attempting to fix/migrate...");
+            const { data: oldData } = await supabaseClient
+                .from('profiles')
+                .select('*')
+                .eq('id', 'aarorn_user_01')
+                .single();
+            
+            if (oldData) {
+                console.log("Migrating legacy data to fix defaults...");
+                userData.balances.mc = parseFloat(oldData.mc_balance) || 17;
+                userData.balances.cl = parseFloat(oldData.cl_balance) || 5;
+                userData.el_taken = parseFloat(oldData.el_taken) || 0;
+                userData.history = oldData.leave_history || [];
+                await saveToSupabase(userData);
+            } else {
+                console.log("No legacy data found, just fixing defaults to 17...");
+                userData.balances.mc = 17;
+                userData.balances.cl = 5;
+                await saveToSupabase(userData);
+            }
+        }
     }
     updateUI(false);
 }
