@@ -501,3 +501,88 @@ td { font-size: 0.875rem; color: var(--md-on-surface); }
     .dashboard-grid { grid-template-columns: 1fr; }
     header { flex-direction: column; gap: 1rem; align-items: flex-start; }
 }
+
+/* ---- LOGIN OVERLAY ---- */
+.login-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    padding: 1.5rem;
+    transition: opacity 0.3s ease;
+}
+
+.login-card {
+    background: var(--md-surface);
+    border-radius: 28px;
+    padding: 2.5rem;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    border: 1px solid var(--md-outline-variant);
+    text-align: center;
+}
+
+.login-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.login-logo i {
+    color: var(--md-primary);
+    font-size: 2rem;
+}
+
+.login-logo span {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--md-on-surface);
+}
+
+.login-card h2 {
+    font-family: 'Google Sans', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--md-on-surface);
+    margin-bottom: 0.5rem;
+}
+
+.login-card p {
+    font-size: 0.875rem;
+    color: var(--md-on-surface-variant);
+    margin-bottom: 2rem;
+}
+
+.login-card .form-group {
+    text-align: left;
+}
+
+.login-error {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+    background: var(--md-error-container);
+    color: var(--md-error);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+/* Hide dashboard when login is shown */
+body.auth-needed .sidebar,
+body.auth-needed .main-content {
+    display: none;
+}
+
+@media (max-width: 480px) {
+    .login-card {
+        padding: 1.5rem;
+    }
+}

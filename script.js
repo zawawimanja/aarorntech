@@ -10,18 +10,15 @@ try {
     console.error("Failed to initialize Supabase client.", e);
 }
 
-const USER_ID = 'aarorn_user_01';
-const EL_ANNUAL = 12; // Total annual EL entitlement
+let USER_ID = null; // Set dynamically after auth
+const EL_ANNUAL = 12;
 
 // Default data
 const defaultData = {
-    joinDate: '2024-03-14',
-    balances: { mc: 17, cl: 5 },
-    el_taken: 0, // EL days used; balance is calculated dynamically
-    history: [
-        { type: 'Earned Leave', dates: 'Apr 12 - Apr 15, 2026', days: 3.0, status: 'Approved' },
-        { type: 'Medical Leave', dates: 'Mar 02, 2026', days: 1.0, status: 'Approved' }
-    ]
+    joinDate: new Date().toISOString().split('T')[0],
+    balances: { mc: 14, cl: 3 },
+    el_taken: 0,
+    history: []
 };
 
 // Holidays List
@@ -56,12 +53,74 @@ const currentDateEl = document.getElementById('current-date');
 const leaveModal = document.getElementById('leaveModal');
 const leaveForm = document.getElementById('leaveForm');
 
+// Auth DOM Elements
+const loginOverlay = document.getElementById('login-overlay');
+const loginForm = document.getElementById('login-form');
+const loginError = document.getElementById('login-error');
+const logoutBtn = document.getElementById('logout-btn');
+
+// --- Auth Handling ---
+
+async function checkUser() {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    handleAuthState(session);
+
+    // Listen for auth changes
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+        handleAuthState(session);
+    });
+}
+
+function handleAuthState(session) {
+    if (session) {
+        USER_ID = session.user.id;
+        loginOverlay.style.display = 'none';
+        document.body.classList.remove('auth-needed');
+        init(); // Load data for this user
+    } else {
+        USER_ID = null;
+        loginOverlay.style.display = 'flex';
+        document.body.classList.add('auth-needed');
+    }
+}
+
+async function signIn(email, password) {
+    loginError.style.display = 'none';
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+    });
+
+    if (error) {
+        loginError.textContent = error.message;
+        loginError.style.display = 'block';
+    }
+}
+
+async function signOut() {
+    await supabaseClient.auth.signOut();
+    window.location.reload(); // Refresh to reset state
+}
+
+loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    await signIn(email, password);
+});
+
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        signOut();
+    });
+}
+
 // --- Auto EL Accrual ---
-// Calculates EL earned so far this year: 1 day per completed month + 0.5 for partial month
 function calculateELEarned() {
     const now = new Date();
-    const monthsCompleted = now.getMonth(); // 0=Jan, 4=May → 4 completed months
-    const partial = now.getDate() >= 15 ? 1.0 : 0.5; // First half = 0.5, second half = 1.0
+    const monthsCompleted = now.getMonth();
+    const partial = now.getDate() >= 15 ? 1.0 : 0.5;
     return Math.min(monthsCompleted + partial, EL_ANNUAL);
 }
 
@@ -71,22 +130,21 @@ function getELRemaining() {
     return Math.max(remaining, 0);
 }
 
-// Initialize
+// --- Data Handling ---
+
 async function init() {
-    console.log("Portal Initializing...");
+    if (!USER_ID) return;
+    console.log("Portal Initializing for user:", USER_ID);
+    
     try {
-        if (supabaseClient) {
-            await fetchUserData();
-        } else {
-            throw new Error("Supabase not available");
-        }
+        await fetchUserData();
     } catch (e) {
         console.warn("Supabase Fetch Failed, using defaults:", e);
         userData = { ...defaultData };
         updateUI(false);
     }
 
-    // Set current date (real time)
+    // Set current date
     const now = new Date();
     if (currentDateEl) {
         currentDateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -94,11 +152,11 @@ async function init() {
 
     renderHolidays();
     calculateTenure();
-    console.log(`EL Earned: ${calculateELEarned()}, EL Taken: ${userData.el_taken}, EL Remaining: ${getELRemaining()}`);
-    console.log("Portal Ready.");
 }
 
 async function fetchUserData() {
+    if (!USER_ID) return;
+    
     const { data, error } = await supabaseClient
         .from('profiles')
         .select('*')
@@ -107,14 +165,14 @@ async function fetchUserData() {
 
     if (error) {
         if (error.code === 'PGRST116') {
-            console.log("No profile found, seeding with defaults...");
+            console.log("No profile found for new user, seeding with defaults...");
             userData = { ...defaultData };
             await saveToSupabase(userData);
         } else {
             throw error;
         }
     } else if (data) {
-        console.log("Data loaded from Supabase:", data);
+        console.log("Data loaded from Supabase.");
         userData = {
             joinDate: data.join_date || defaultData.joinDate,
             balances: {
@@ -129,7 +187,7 @@ async function fetchUserData() {
 }
 
 async function saveToSupabase(dataToSave) {
-    if (!supabaseClient) return;
+    if (!supabaseClient || !USER_ID) return;
     const { error } = await supabaseClient
         .from('profiles')
         .upsert({
@@ -273,7 +331,7 @@ const endPicker = flatpickr("#endDate", {
     disableMobile: true
 });
 
-init();
+checkUser();
 
 // --- Theme Toggle Logic ---
 const themeToggle = document.getElementById('theme-toggle');
