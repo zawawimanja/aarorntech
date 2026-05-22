@@ -42,9 +42,14 @@
                 <h1>Good day! <span>👋</span></h1>
                 <p style="color: var(--md-on-surface-variant); margin-top: 0.3rem; font-size: 0.875rem;">Here's your leave summary for today.</p>
             </div>
-            <div class="md-chip">
-                <i class="fas fa-calendar" style="color: var(--md-primary); font-size: 0.8rem;"></i>
-                <span id="current-date"></span>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <button id="theme-toggle" class="btn-icon" aria-label="Toggle theme">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
+                <div class="md-chip">
+                    <i class="fas fa-calendar" style="color: var(--md-primary); font-size: 0.8rem;"></i>
+                    <span id="current-date"></span>
+                </div>
             </div>
         </header>
 
