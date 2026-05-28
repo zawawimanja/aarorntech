@@ -16,7 +16,7 @@ const EL_ANNUAL = 12;
 // Default data
 const defaultData = {
     joinDate: '2024-03-14',
-    balances: { mc: 17, cl: 5 },
+    balances: { mc: 18, cl: 5 },
     el_taken: 0,
     history: []
 };
@@ -196,7 +196,7 @@ async function fetchUserData() {
     } else if (data) {
         console.log("Data loaded from Supabase.");
         userData = {
-            joinDate: data.join_date || defaultData.joinDate,
+            joinDate: '2024-03-14', // Hardcoded fix to override corrupted DB join_date
             balances: {
                 mc: parseFloat(data.mc_balance) || defaultData.balances.mc,
                 cl: parseFloat(data.cl_balance) || defaultData.balances.cl
@@ -217,14 +217,14 @@ async function fetchUserData() {
             
             if (oldData) {
                 console.log("Migrating legacy data to fix defaults...");
-                userData.balances.mc = parseFloat(oldData.mc_balance) || 17;
+                userData.balances.mc = parseFloat(oldData.mc_balance) || 18;
                 userData.balances.cl = parseFloat(oldData.cl_balance) || 5;
                 userData.el_taken = parseFloat(oldData.el_taken) || 0;
                 userData.history = oldData.leave_history || [];
                 await saveToSupabase(userData);
             } else {
-                console.log("No legacy data found, just fixing defaults to 17...");
-                userData.balances.mc = 17;
+                console.log("No legacy data found, just fixing defaults to 18...");
+                userData.balances.mc = 18;
                 userData.balances.cl = 5;
                 await saveToSupabase(userData);
             }
@@ -303,6 +303,9 @@ function calculateTenure() {
     if (months < 0) { years--; months += 12; }
     const tenureEl = document.getElementById('service-tenure');
     if (tenureEl) tenureEl.textContent = `${years}Y ${months}M ${days}D`;
+    
+    const sinceEl = document.getElementById('service-since');
+    if (sinceEl) sinceEl.textContent = `Since ${joinDate.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`;
 }
 
 function renderHolidays() {
