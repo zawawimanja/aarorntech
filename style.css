@@ -238,7 +238,7 @@ header h1 span { color: var(--md-primary); font-weight: 700; }
 }
 
 .stat-card.mc { border-top: 4px solid var(--md-primary); }
-.stat-card.el { border-top: 4px solid var(--md-secondary); }
+.stat-card.al { border-top: 4px solid var(--md-secondary); }
 
 .stat-card .label {
     display: flex;
@@ -255,7 +255,7 @@ header h1 span { color: var(--md-primary); font-weight: 700; }
 .stat-card .label i { font-size: 0.85rem; }
 
 .stat-card.mc .label { color: var(--md-primary); }
-.stat-card.el .label { color: var(--md-secondary); }
+.stat-card.al .label { color: var(--md-secondary); }
 
 .stat-card .value {
     font-family: 'Google Sans', sans-serif;
@@ -267,7 +267,7 @@ header h1 span { color: var(--md-primary); font-weight: 700; }
 }
 
 .stat-card.mc .value { color: var(--md-primary); }
-.stat-card.el .value { color: var(--md-secondary); }
+.stat-card.al .value { color: var(--md-secondary); }
 
 /* ---- CHIP (date display) ---- */
 .md-chip {
@@ -450,7 +450,7 @@ td { font-size: 0.875rem; color: var(--md-on-surface); }
     box-shadow: inset 0 0 0 1px var(--md-primary);
 }
 
-/* ---- EL PROGRESS BAR ---- */
+/* ---- AL PROGRESS BAR ---- */
 .md-progress {
     margin-top: 0.875rem;
     background: var(--md-secondary-container);
@@ -579,6 +579,10 @@ td { font-size: 0.875rem; color: var(--md-on-surface); }
 body.auth-needed .sidebar,
 body.auth-needed .main-content {
     display: none;
+}
+
+[data-theme="dark"] .login-overlay {
+    background: rgba(32, 33, 36, 0.8);
 }
 
 @media (max-width: 480px) {

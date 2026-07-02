@@ -44,6 +44,10 @@
                 <p style="color: var(--md-on-surface-variant); margin-top: 0.3rem; font-size: 0.875rem;">Here's your leave summary for today.</p>
             </div>
             <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <div id="offline-badge" class="md-chip animate-fade" style="display: none; background: var(--md-error-container); color: var(--md-error); border: none;">
+                    <i class="fas fa-wifi-slash" style="font-size: 0.8rem;"></i>
+                    <span>Offline Mode</span>
+                </div>
                 <button id="theme-toggle" class="btn-icon" aria-label="Toggle theme">
                     <i class="fas fa-moon" id="theme-icon"></i>
                 </button>
@@ -62,12 +66,12 @@
                 <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Days remaining</div>
             </div>
 
-            <div class="stat-card el animate-fade" style="animation-delay: 0.2s;">
-                <div class="label"><i class="fas fa-umbrella-beach"></i> Earned Leave (EL)</div>
-                <div class="value" id="el-balance">4.5</div>
-                <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Days remaining / 12 total</div>
+            <div class="stat-card al animate-fade" style="animation-delay: 0.2s;">
+                <div class="label"><i class="fas fa-umbrella-beach"></i> Annual Leave (AL)</div>
+                <div class="value" id="al-balance">4.5</div>
+                <div style="font-size: 0.8rem; color: var(--md-on-surface-variant); margin-top: 0.5rem;">Days remaining / 16 total</div>
                 <div class="md-progress" style="margin-top: 0.75rem;">
-                    <div class="md-progress-fill" id="el-progress-bar" style="width: 37%;"></div>
+                    <div class="md-progress-fill" id="al-progress-bar" style="width: 37%;"></div>
                 </div>
             </div>
 
@@ -138,7 +142,7 @@
                 <div class="form-group">
                     <label>Leave Type</label>
                     <select id="leaveType" required>
-                        <option value="EL">Earned Leave</option>
+                        <option value="AL">Annual Leave</option>
                         <option value="MC">Medical Leave</option>
                         <option value="CL">Compassionate Leave</option>
                     </select>
@@ -189,6 +193,14 @@
                 </button>
             </form>
             <div id="login-error" class="login-error" style="display: none;"></div>
+            <div id="offline-option-container" style="display: none; margin-top: 1.25rem; border-top: 1px dashed var(--md-outline); padding-top: 1.25rem;">
+                <p style="margin-bottom: 0.75rem; font-size: 0.8rem; color: var(--md-on-surface-variant);">
+                    Having database connection issues?
+                </p>
+                <button type="button" id="offline-btn" class="btn-primary" style="width: 100%; padding: 0.75rem; background: var(--md-secondary); color: var(--md-on-primary);">
+                    <i class="fas fa-wifi-slash" style="margin-right: 0.5rem;"></i> Enter Offline Mode
+                </button>
+            </div>
         </div>
     </div>
 

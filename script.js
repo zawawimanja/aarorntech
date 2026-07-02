@@ -3,15 +3,22 @@ const SUPABASE_URL = 'https://zrtbhkjqpivojwwsicwn.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpydGJoa2pxcGl2b2p3d3NpY3duIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMzM1MDUsImV4cCI6MjA5MzcwOTUwNX0.iVf0OxsY0cF9Y14SPvAiZ0oZSD6yDTIL2G1X_wgDTPM'; 
 
 let supabaseClient;
+let isOfflineMode = false;
+
 try {
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    console.log("Supabase client initialized.");
+    if (window.supabase) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        console.log("Supabase client initialized.");
+    } else {
+        console.warn("Supabase library not loaded. Running in offline capability mode.");
+    }
 } catch (e) {
     console.error("Failed to initialize Supabase client.", e);
 }
 
 let USER_ID = null; // Set dynamically after auth
-const EL_ANNUAL = 12;
+const AL_ANNUAL = 12;
+const AL_ADDITIONAL = 4;
 
 // Default data
 const defaultData = {
@@ -47,7 +54,7 @@ let userData = { ...defaultData };
 
 // DOM Elements
 const mcBalanceEl = document.getElementById('mc-balance');
-const elBalanceEl = document.getElementById('el-balance');
+const alBalanceEl = document.getElementById('al-balance');
 const historyBody = document.getElementById('history-body');
 const currentDateEl = document.getElementById('current-date');
 const leaveModal = document.getElementById('leaveModal');
@@ -61,44 +68,108 @@ const logoutBtn = document.getElementById('logout-btn');
 
 // --- Auth Handling ---
 
-async function checkUser() {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    handleAuthState(session);
+const offlineBtn = document.getElementById('offline-btn');
+const offlineOptionContainer = document.getElementById('offline-option-container');
+const offlineBadge = document.getElementById('offline-badge');
 
-    // Listen for auth changes
-    supabaseClient.auth.onAuthStateChange((_event, session) => {
+function showOfflineOption(message) {
+    if (loginError) {
+        loginError.textContent = message || "Database connection error (Failed to fetch).";
+        loginError.style.display = 'block';
+    }
+    if (offlineOptionContainer) {
+        offlineOptionContainer.style.display = 'block';
+    }
+}
+
+async function checkUser() {
+    // Check if we already have offline mode saved in session/localStorage
+    if (localStorage.getItem('aarorntech_offline_mode') === 'true') {
+        enableOfflineMode();
+        return;
+    }
+
+    if (!supabaseClient) {
+        showOfflineOption("Supabase could not be initialized. Please check your internet connection.");
+        return;
+    }
+
+    try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        if (error) throw error;
         handleAuthState(session);
-    });
+
+        // Listen for auth changes
+        supabaseClient.auth.onAuthStateChange((_event, session) => {
+            handleAuthState(session);
+        });
+    } catch (e) {
+        console.error("Auth check failed:", e);
+        showOfflineOption("Unable to connect to the database (Failed to fetch). You can continue in Offline Mode.");
+        handleAuthState(null);
+    }
 }
 
 function handleAuthState(session) {
-    if (session) {
+    if (session && !isOfflineMode) {
         USER_ID = session.user.id;
         loginOverlay.style.display = 'none';
         document.body.classList.remove('auth-needed');
+        if (offlineBadge) offlineBadge.style.display = 'none';
         init(); // Load data for this user
+    } else if (isOfflineMode) {
+        USER_ID = 'local_user';
+        loginOverlay.style.display = 'none';
+        document.body.classList.remove('auth-needed');
+        if (offlineBadge) offlineBadge.style.display = 'flex';
+        init();
     } else {
         USER_ID = null;
         loginOverlay.style.display = 'flex';
         document.body.classList.add('auth-needed');
+        if (offlineBadge) offlineBadge.style.display = 'none';
     }
 }
 
 async function signIn(email, password) {
     loginError.style.display = 'none';
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password,
-    });
+    if (!supabaseClient) {
+        showOfflineOption("Supabase is offline. Cannot sign in.");
+        return;
+    }
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email,
+            password,
+        });
 
-    if (error) {
-        loginError.textContent = error.message;
-        loginError.style.display = 'block';
+        if (error) {
+            loginError.textContent = error.message;
+            loginError.style.display = 'block';
+        }
+    } catch (e) {
+        console.error("Sign in failed:", e);
+        showOfflineOption("Sign in failed: " + (e.message || "Failed to fetch (check database connection)."));
     }
 }
 
+function enableOfflineMode() {
+    isOfflineMode = true;
+    localStorage.setItem('aarorntech_offline_mode', 'true');
+    handleAuthState(null); // Will trigger the isOfflineMode branch in handleAuthState
+}
+
 async function signOut() {
-    await supabaseClient.auth.signOut();
+    if (isOfflineMode) {
+        localStorage.removeItem('aarorntech_offline_mode');
+        isOfflineMode = false;
+    } else if (supabaseClient) {
+        try {
+            await supabaseClient.auth.signOut();
+        } catch (e) {
+            console.error("Sign out error:", e);
+        }
+    }
     window.location.reload(); // Refresh to reset state
 }
 
@@ -109,6 +180,13 @@ loginForm.addEventListener('submit', async (e) => {
     await signIn(email, password);
 });
 
+if (offlineBtn) {
+    offlineBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        enableOfflineMode();
+    });
+}
+
 if (logoutBtn) {
     logoutBtn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -116,16 +194,16 @@ if (logoutBtn) {
     });
 }
 
-// --- Auto EL Accrual ---
-function calculateELEarned() {
+// --- Auto AL Accrual ---
+function calculateALEarned() {
     const now = new Date();
     const monthsCompleted = now.getMonth();
     const partial = now.getDate() >= 15 ? 1.0 : 0.5;
-    return Math.min(monthsCompleted + partial, EL_ANNUAL);
+    return Math.min(monthsCompleted + partial, AL_ANNUAL) + AL_ADDITIONAL;
 }
 
-function getELRemaining() {
-    const earned = calculateELEarned();
+function getALRemaining() {
+    const earned = calculateALEarned();
     const remaining = parseFloat((earned - (userData.el_taken || 0)).toFixed(1));
     return Math.max(remaining, 0);
 }
@@ -156,6 +234,30 @@ async function init() {
 
 async function fetchUserData() {
     if (!USER_ID) return;
+    
+    if (isOfflineMode) {
+        console.log("Loading data from local storage (Offline Mode).");
+        const localVal = localStorage.getItem('aarorntech_userdata_local');
+        if (localVal) {
+            try {
+                userData = JSON.parse(localVal);
+                console.log("Data loaded from local storage successfully.");
+            } catch (e) {
+                console.error("Failed to parse local storage data, using defaults:", e);
+                userData = { ...defaultData };
+            }
+        } else {
+            console.log("No local data found. Seeding with defaults.");
+            userData = { ...defaultData };
+            localStorage.setItem('aarorntech_userdata_local', JSON.stringify(userData));
+        }
+        updateUI(false);
+        return;
+    }
+
+    if (!supabaseClient) {
+        throw new Error("Supabase client is not available.");
+    }
     
     let { data, error } = await supabaseClient
         .from('profiles')
@@ -234,38 +336,48 @@ async function fetchUserData() {
 }
 
 async function saveToSupabase(dataToSave) {
+    if (isOfflineMode) {
+        console.log("Saving data to local storage (Offline Mode).");
+        localStorage.setItem('aarorntech_userdata_local', JSON.stringify(dataToSave));
+        return;
+    }
+
     if (!supabaseClient || !USER_ID) return;
-    const { error } = await supabaseClient
-        .from('profiles')
-        .upsert({
-            id: USER_ID,
-            join_date: dataToSave.joinDate,
-            mc_balance: dataToSave.balances.mc,
-            cl_balance: dataToSave.balances.cl,
-            el_taken: dataToSave.el_taken || 0,
-            leave_history: dataToSave.history
-        });
-    if (error) console.error("Save failed:", error);
+    try {
+        const { error } = await supabaseClient
+            .from('profiles')
+            .upsert({
+                id: USER_ID,
+                join_date: dataToSave.joinDate,
+                mc_balance: dataToSave.balances.mc,
+                cl_balance: dataToSave.balances.cl,
+                el_taken: dataToSave.el_taken || 0,
+                leave_history: dataToSave.history
+            });
+        if (error) console.error("Save failed:", error);
+    } catch (e) {
+        console.error("Save failed due to network error:", e);
+    }
 }
 
 function updateUI(shouldSave = true) {
-    const elRemaining = getELRemaining();
-    const elEarned = calculateELEarned();
+    const alRemaining = getALRemaining();
+    const alEarned = calculateALEarned();
 
     if (mcBalanceEl) mcBalanceEl.textContent = userData.balances.mc;
-    if (elBalanceEl) elBalanceEl.textContent = elRemaining;
+    if (alBalanceEl) alBalanceEl.textContent = alRemaining;
 
-    // Update EL progress bar (out of 12 total)
-    const elProgressBar = document.getElementById('el-progress-bar');
-    if (elProgressBar) {
-        const pct = Math.min((elRemaining / EL_ANNUAL) * 100, 100);
-        elProgressBar.style.width = pct + '%';
+    // Update AL progress bar (out of 16 total)
+    const alProgressBar = document.getElementById('al-progress-bar');
+    if (alProgressBar) {
+        const pct = Math.min((alRemaining / (AL_ANNUAL + AL_ADDITIONAL)) * 100, 100);
+        alProgressBar.style.width = pct + '%';
     }
 
     if (historyBody) {
         historyBody.innerHTML = userData.history.map((item, index) => `
             <tr>
-                <td>${item.type}</td>
+                <td>${item.type === 'Earned Leave' ? 'Annual Leave' : item.type}</td>
                 <td>${item.dates}</td>
                 <td>${item.days.toFixed(1)}</td>
                 <td>
@@ -284,7 +396,7 @@ function updateUI(shouldSave = true) {
 async function deleteLeave(index) {
     if (!confirm('Delete this leave and restore balance?')) return;
     const item = userData.history[index];
-    if (item.type === 'Earned Leave') {
+    if (item.type === 'Earned Leave' || item.type === 'Annual Leave') {
         userData.el_taken = Math.max(0, (userData.el_taken || 0) - item.days);
     } else if (item.type === 'Medical Leave') {
         userData.balances.mc += item.days;
@@ -332,12 +444,12 @@ leaveForm.addEventListener('submit', (e) => {
     const end = new Date(document.getElementById('endDate').value);
     const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
 
-    if (type === 'EL') {
-        const remaining = getELRemaining();
+    if (type === 'AL' || type === 'EL') {
+        const remaining = getALRemaining();
         if (remaining >= diffDays) {
             userData.el_taken = (userData.el_taken || 0) + diffDays;
         } else {
-            alert(`Insufficient EL! You have ${remaining} days remaining.`);
+            alert(`Insufficient Annual Leave! You have ${remaining} days remaining.`);
             return;
         }
     } else if (type === 'MC') {
@@ -350,7 +462,7 @@ leaveForm.addEventListener('submit', (e) => {
     }
 
     userData.history.unshift({
-        type: type === 'EL' ? 'Earned Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave',
+        type: (type === 'AL' || type === 'EL') ? 'Annual Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave',
         dates: `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
         days: diffDays,
         status: 'Approved'
