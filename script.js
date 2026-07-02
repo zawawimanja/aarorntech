@@ -194,17 +194,50 @@ if (logoutBtn) {
     });
 }
 
+// --- Helper to get leave year ---
+function getLeaveYear(item) {
+    if (item.year) return item.year;
+    const match = item.dates.match(/(\d{4})$/);
+    if (match) return parseInt(match[1], 10);
+    return new Date().getFullYear();
+}
+
+// --- Carry Forward Calculation ---
+function getCarryForward(year) {
+    if (year <= 2025) {
+        return 0;
+    }
+    if (year === 2026) {
+        return 4; // Hardcoded carry-forward for 2026
+    }
+    const prevYear = year - 1;
+    const prevAccrued = 12;
+    const prevCarryForward = getCarryForward(prevYear);
+    const prevTaken = userData.history
+        .filter(item => (item.type === 'Annual Leave' || item.type === 'Earned Leave') && getLeaveYear(item) === prevYear)
+        .reduce((sum, item) => sum + item.days, 0);
+    const prevRemaining = prevAccrued + prevCarryForward - prevTaken;
+    return Math.max(0, parseFloat(prevRemaining.toFixed(1)));
+}
+
 // --- Auto AL Accrual ---
 function calculateALEarned() {
     const now = new Date();
+    const currentYear = now.getFullYear();
     const monthsCompleted = now.getMonth();
     const partial = now.getDate() >= 15 ? 1.0 : 0.5;
-    return Math.min(monthsCompleted + partial, AL_ANNUAL) + AL_ADDITIONAL;
+    const carryForward = getCarryForward(currentYear);
+    return Math.min(monthsCompleted + partial, AL_ANNUAL) + carryForward;
 }
 
 function getALRemaining() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
     const earned = calculateALEarned();
-    const remaining = parseFloat((earned - (userData.el_taken || 0)).toFixed(1));
+    const takenInCurrentYear = userData.history
+        .filter(item => (item.type === 'Annual Leave' || item.type === 'Earned Leave') && getLeaveYear(item) === currentYear)
+        .reduce((sum, item) => sum + item.days, 0);
+    const remaining = parseFloat((earned - takenInCurrentYear).toFixed(1));
     return Math.max(remaining, 0);
 }
 
@@ -362,15 +395,22 @@ async function saveToSupabase(dataToSave) {
 
 function updateUI(shouldSave = true) {
     const alRemaining = getALRemaining();
-    const alEarned = calculateALEarned();
+    const currentYear = new Date().getFullYear();
+    const carryForward = getCarryForward(currentYear);
+    const totalForYear = AL_ANNUAL + carryForward;
 
     if (mcBalanceEl) mcBalanceEl.textContent = userData.balances.mc;
     if (alBalanceEl) alBalanceEl.textContent = alRemaining;
 
-    // Update AL progress bar (out of 16 total)
+    const alTotalLabel = document.getElementById('al-total-label');
+    if (alTotalLabel) {
+        alTotalLabel.textContent = `Days remaining / ${totalForYear} total`;
+    }
+
+    // Update AL progress bar
     const alProgressBar = document.getElementById('al-progress-bar');
     if (alProgressBar) {
-        const pct = Math.min((alRemaining / (AL_ANNUAL + AL_ADDITIONAL)) * 100, 100);
+        const pct = Math.min((alRemaining / totalForYear) * 100, 100);
         alProgressBar.style.width = pct + '%';
     }
 
@@ -465,7 +505,8 @@ leaveForm.addEventListener('submit', (e) => {
         type: (type === 'AL' || type === 'EL') ? 'Annual Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave',
         dates: `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
         days: diffDays,
-        status: 'Approved'
+        status: 'Approved',
+        year: start.getFullYear()
     });
 
     updateUI();
