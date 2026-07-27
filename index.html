@@ -94,9 +94,14 @@
             <section class="animate-fade" style="animation-delay: 0.5s;">
                 <div class="section-title">
                     <h2>Leave History</h2>
-                    <button class="btn-primary" onclick="openModal()">
-                        <i class="fas fa-plus"></i> Apply Leave
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-secondary" onclick="openOtModal()">
+                            <i class="fas fa-clock"></i> Claim OT
+                        </button>
+                        <button class="btn-primary" onclick="openModal()">
+                            <i class="fas fa-plus"></i> Apply Leave
+                        </button>
+                    </div>
                 </div>
                 <div class="card-table">
                     <table>
@@ -147,6 +152,14 @@
                         <option value="CL">Compassionate Leave</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Duration / Session</label>
+                    <select id="leaveDuration" required>
+                        <option value="FULL">Full Day (1.0 day/day)</option>
+                        <option value="HALF_AM">Half Day - Morning (0.5 day)</option>
+                        <option value="HALF_PM">Half Day - Afternoon (0.5 day)</option>
+                    </select>
+                </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                     <div class="form-group">
                         <label>Start Date</label>
@@ -161,10 +174,53 @@
                     <label>Reason (Optional)</label>
                     <textarea id="reason" rows="3" placeholder="Brief reason..."></textarea>
                 </div>
+                <div id="leaveDaysPreview" class="days-preview-badge">
+                    <i class="fas fa-calculator"></i> Total Duration: <span id="calcDaysCount">1.0</span> day(s)
+                </div>
                 <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem; justify-content: flex-end;">
                     <button type="button" class="btn-primary" style="background: none; color: var(--md-primary); box-shadow: none;" onclick="closeModal()">Cancel</button>
                     <button type="reset" class="btn-primary" style="background: none; color: var(--md-error); box-shadow: none;">Reset</button>
                     <button type="submit" class="btn-primary">Submit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Claim OT Modal -->
+    <div class="modal-overlay" id="otModal">
+        <div class="modal-content">
+            <h2>Claim Overtime (OT) Day</h2>
+            <p style="font-size: 0.85rem; color: var(--md-on-surface-variant); margin-top: -1rem; margin-bottom: 1.25rem;">
+                Claiming OT adds replacement days to your Annual Leave balance.
+            </p>
+            <form id="otForm">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>OT Start Date</label>
+                        <input type="text" id="otStartDate" placeholder="Start date" required readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>OT End Date</label>
+                        <input type="text" id="otEndDate" placeholder="End date" required readonly>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>OT Credit Rate / Day</label>
+                    <select id="otDuration" required>
+                        <option value="1.0">Full Day (+1.0 day/day)</option>
+                        <option value="0.5">Half Day (+0.5 day/day)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Work Description / Project</label>
+                    <textarea id="otReason" rows="3" placeholder="e.g. Weekend system maintenance, event deployment..." required></textarea>
+                </div>
+                <div id="otDaysPreview" class="days-preview-badge status-ot-preview">
+                    <i class="fas fa-plus-circle"></i> Adding: <span id="otCalcCount">+1.0</span> day(s) leave credit
+                </div>
+                <div style="display: flex; gap: 0.75rem; margin-top: 1.25rem; justify-content: flex-end;">
+                    <button type="button" class="btn-primary" style="background: none; color: var(--md-primary); box-shadow: none;" onclick="closeOtModal()">Cancel</button>
+                    <button type="submit" class="btn-primary" style="background: var(--md-secondary);">Submit Claim</button>
                 </div>
             </form>
         </div>

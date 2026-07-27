@@ -25,6 +25,7 @@ const defaultData = {
     joinDate: '2024-03-14',
     balances: { mc: 18, cl: 5 },
     el_taken: 0,
+    ot_credit: 0,
     history: []
 };
 
@@ -59,6 +60,8 @@ const historyBody = document.getElementById('history-body');
 const currentDateEl = document.getElementById('current-date');
 const leaveModal = document.getElementById('leaveModal');
 const leaveForm = document.getElementById('leaveForm');
+const otModal = document.getElementById('otModal');
+const otForm = document.getElementById('otForm');
 
 // Auth DOM Elements
 const loginOverlay = document.getElementById('login-overlay');
@@ -214,7 +217,7 @@ function getCarryForward(year) {
     const prevAccrued = 12;
     const prevCarryForward = getCarryForward(prevYear);
     const prevTaken = userData.history
-        .filter(item => (item.type === 'Annual Leave' || item.type === 'Earned Leave') && getLeaveYear(item) === prevYear)
+        .filter(item => (item.type.includes('Annual Leave') || item.type === 'Earned Leave') && getLeaveYear(item) === prevYear)
         .reduce((sum, item) => sum + item.days, 0);
     const prevRemaining = prevAccrued + prevCarryForward - prevTaken;
     return Math.max(0, parseFloat(prevRemaining.toFixed(1)));
@@ -235,9 +238,10 @@ function getALRemaining() {
     const currentYear = now.getFullYear();
     const earned = calculateALEarned();
     const takenInCurrentYear = userData.history
-        .filter(item => (item.type === 'Annual Leave' || item.type === 'Earned Leave') && getLeaveYear(item) === currentYear)
+        .filter(item => (item.type.includes('Annual Leave') || item.type === 'Earned Leave') && getLeaveYear(item) === currentYear)
         .reduce((sum, item) => sum + item.days, 0);
-    const remaining = parseFloat((earned - takenInCurrentYear).toFixed(1));
+    const otCredit = userData.ot_credit || 0;
+    const remaining = parseFloat((earned + otCredit - takenInCurrentYear).toFixed(1));
     return Math.max(remaining, 0);
 }
 
@@ -274,6 +278,7 @@ async function fetchUserData() {
         if (localVal) {
             try {
                 userData = JSON.parse(localVal);
+                if (userData.ot_credit === undefined) userData.ot_credit = 0;
                 console.log("Data loaded from local storage successfully.");
             } catch (e) {
                 console.error("Failed to parse local storage data, using defaults:", e);
@@ -317,6 +322,7 @@ async function fetchUserData() {
                         cl: parseFloat(oldData.cl_balance) || defaultData.balances.cl
                     },
                     el_taken: parseFloat(oldData.el_taken) || 0,
+                    ot_credit: parseFloat(oldData.ot_credit) || 0,
                     history: oldData.leave_history || []
                 };
                 await saveToSupabase(userData);
@@ -337,6 +343,7 @@ async function fetchUserData() {
                 cl: parseFloat(data.cl_balance) || defaultData.balances.cl
             },
             el_taken: parseFloat(data.el_taken) || 0,
+            ot_credit: parseFloat(data.ot_credit) || 0,
             history: data.leave_history || []
         };
 
@@ -355,6 +362,7 @@ async function fetchUserData() {
                 userData.balances.mc = parseFloat(oldData.mc_balance) || 18;
                 userData.balances.cl = parseFloat(oldData.cl_balance) || 5;
                 userData.el_taken = parseFloat(oldData.el_taken) || 0;
+                userData.ot_credit = parseFloat(oldData.ot_credit) || 0;
                 userData.history = oldData.leave_history || [];
                 await saveToSupabase(userData);
             } else {
@@ -385,6 +393,7 @@ async function saveToSupabase(dataToSave) {
                 mc_balance: dataToSave.balances.mc,
                 cl_balance: dataToSave.balances.cl,
                 el_taken: dataToSave.el_taken || 0,
+                ot_credit: dataToSave.ot_credit || 0,
                 leave_history: dataToSave.history
             });
         if (error) console.error("Save failed:", error);
@@ -404,28 +413,34 @@ function updateUI(shouldSave = true) {
 
     const alTotalLabel = document.getElementById('al-total-label');
     if (alTotalLabel) {
-        alTotalLabel.textContent = `Days remaining / ${totalForYear} total`;
+        const otText = (userData.ot_credit || 0) > 0 ? ` (incl. +${userData.ot_credit}d OT)` : '';
+        alTotalLabel.textContent = `Days remaining / ${totalForYear} total${otText}`;
     }
 
     // Update AL progress bar
     const alProgressBar = document.getElementById('al-progress-bar');
     if (alProgressBar) {
-        const pct = Math.min((alRemaining / totalForYear) * 100, 100);
+        const pct = Math.min((alRemaining / (totalForYear + (userData.ot_credit || 0))) * 100, 100);
         alProgressBar.style.width = pct + '%';
     }
 
     if (historyBody) {
-        historyBody.innerHTML = userData.history.map((item, index) => `
+        historyBody.innerHTML = userData.history.map((item, index) => {
+            const isOT = item.type === 'OT Credit' || item.type === 'Overtime (OT)';
+            const statusClass = isOT ? 'status-ot' : `status-${item.status.toLowerCase()}`;
+            const daysText = isOT ? `+${item.days.toFixed(1)}` : item.days.toFixed(1);
+            return `
             <tr>
                 <td>${item.type === 'Earned Leave' ? 'Annual Leave' : item.type}</td>
                 <td>${item.dates}</td>
-                <td>${item.days.toFixed(1)}</td>
+                <td>${daysText}</td>
                 <td>
-                    <span class="status-badge status-${item.status.toLowerCase()}">${item.status}</span>
-                    <button onclick="deleteLeave(${index})" style="background:none; border:none; color:var(--danger); cursor:pointer; margin-left:10px;"><i class="fas fa-trash"></i></button>
+                    <span class="status-badge ${statusClass}">${isOT ? 'Credited' : item.status}</span>
+                    <button onclick="deleteLeave(${index})" style="background:none; border:none; color:var(--md-error); cursor:pointer; margin-left:10px;"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     if (shouldSave) {
@@ -434,11 +449,13 @@ function updateUI(shouldSave = true) {
 }
 
 async function deleteLeave(index) {
-    if (!confirm('Delete this leave and restore balance?')) return;
+    if (!confirm('Delete this entry and adjust balance?')) return;
     const item = userData.history[index];
-    if (item.type === 'Earned Leave' || item.type === 'Annual Leave') {
-        userData.el_taken = Math.max(0, (userData.el_taken || 0) - item.days);
-    } else if (item.type === 'Medical Leave') {
+    if (item.type === 'OT Credit' || item.type === 'Overtime (OT)') {
+        userData.ot_credit = Math.max(0, parseFloat(((userData.ot_credit || 0) - item.days).toFixed(1)));
+    } else if (item.type.includes('Annual Leave') || item.type === 'Earned Leave') {
+        userData.el_taken = Math.max(0, parseFloat(((userData.el_taken || 0) - item.days).toFixed(1)));
+    } else if (item.type.includes('Medical Leave')) {
         userData.balances.mc += item.days;
     }
     userData.history.splice(index, 1);
@@ -477,24 +494,66 @@ function renderHolidays() {
     }).join('');
 }
 
+function calculateLeaveDays() {
+    const startVal = document.getElementById('startDate').value;
+    const endVal = document.getElementById('endDate').value;
+    const durationVal = document.getElementById('leaveDuration').value;
+    const calcDaysCountEl = document.getElementById('calcDaysCount');
+
+    if (!startVal || !endVal) {
+        const defaultDays = (durationVal === 'HALF_AM' || durationVal === 'HALF_PM') ? 0.5 : 1.0;
+        if (calcDaysCountEl) calcDaysCountEl.textContent = defaultDays.toFixed(1);
+        return defaultDays;
+    }
+
+    const start = new Date(startVal);
+    const end = new Date(endVal);
+    const rawDiffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+    let finalDays = rawDiffDays;
+    if (durationVal === 'HALF_AM' || durationVal === 'HALF_PM') {
+        if (rawDiffDays === 1) {
+            finalDays = 0.5;
+        } else {
+            finalDays = rawDiffDays - 0.5;
+        }
+    }
+
+    if (calcDaysCountEl) calcDaysCountEl.textContent = finalDays.toFixed(1);
+    return finalDays;
+}
+
 leaveForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const type = document.getElementById('leaveType').value;
-    const start = new Date(document.getElementById('startDate').value);
-    const end = new Date(document.getElementById('endDate').value);
-    const diffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const duration = document.getElementById('leaveDuration').value;
+    const startStr = document.getElementById('startDate').value;
+    const endStr = document.getElementById('endDate').value;
+
+    if (!startStr || !endStr) return;
+
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const calcDays = calculateLeaveDays();
+
+    let typeTitle = type === 'AL' ? 'Annual Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave';
+    if (duration === 'HALF_AM') {
+        typeTitle += ' (Half Day AM)';
+    } else if (duration === 'HALF_PM') {
+        typeTitle += ' (Half Day PM)';
+    }
 
     if (type === 'AL' || type === 'EL') {
         const remaining = getALRemaining();
-        if (remaining >= diffDays) {
-            userData.el_taken = (userData.el_taken || 0) + diffDays;
+        if (remaining >= calcDays) {
+            userData.el_taken = (userData.el_taken || 0) + calcDays;
         } else {
             alert(`Insufficient Annual Leave! You have ${remaining} days remaining.`);
             return;
         }
     } else if (type === 'MC') {
-        if (userData.balances.mc >= diffDays) {
-            userData.balances.mc -= diffDays;
+        if (userData.balances.mc >= calcDays) {
+            userData.balances.mc -= calcDays;
         } else {
             alert(`Insufficient MC! You have ${userData.balances.mc} days remaining.`);
             return;
@@ -502,9 +561,11 @@ leaveForm.addEventListener('submit', (e) => {
     }
 
     userData.history.unshift({
-        type: (type === 'AL' || type === 'EL') ? 'Annual Leave' : type === 'MC' ? 'Medical Leave' : 'Compassionate Leave',
-        dates: `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
-        days: diffDays,
+        type: typeTitle,
+        dates: startStr === endStr 
+            ? start.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+            : `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
+        days: calcDays,
         status: 'Approved',
         year: start.getFullYear()
     });
@@ -512,11 +573,18 @@ leaveForm.addEventListener('submit', (e) => {
     updateUI();
     closeModal();
     leaveForm.reset();
+    calculateLeaveDays();
 });
 
 function openModal() { leaveModal.style.display = 'flex'; }
 function closeModal() { leaveModal.style.display = 'none'; }
-window.onclick = (e) => { if (e.target == leaveModal) closeModal(); }
+function openOtModal() { if (otModal) otModal.style.display = 'flex'; }
+function closeOtModal() { if (otModal) otModal.style.display = 'none'; }
+
+window.onclick = (e) => { 
+    if (e.target == leaveModal) closeModal();
+    if (e.target == otModal) closeOtModal();
+}
 
 // Initialize Flatpickr date pickers
 const startPicker = flatpickr("#startDate", {
@@ -524,13 +592,107 @@ const startPicker = flatpickr("#startDate", {
     disableMobile: true,
     onChange: function(selectedDates) {
         endPicker.set("minDate", selectedDates[0]);
+        calculateLeaveDays();
     }
 });
 
 const endPicker = flatpickr("#endDate", {
     dateFormat: "Y-m-d",
-    disableMobile: true
+    disableMobile: true,
+    onChange: function() {
+        calculateLeaveDays();
+    }
 });
+
+const leaveDurationEl = document.getElementById('leaveDuration');
+if (leaveDurationEl) {
+    leaveDurationEl.addEventListener('change', calculateLeaveDays);
+}
+
+function calculateOtDays() {
+    const startStr = document.getElementById('otStartDate').value;
+    const endStr = document.getElementById('otEndDate').value;
+    const durationVal = parseFloat(document.getElementById('otDuration').value) || 1.0;
+    const otCalcCountEl = document.getElementById('otCalcCount');
+
+    if (!startStr || !endStr) {
+        if (otCalcCountEl) otCalcCountEl.textContent = `+${durationVal.toFixed(1)}`;
+        return durationVal;
+    }
+
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const rawDiffDays = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const totalOtDays = rawDiffDays * durationVal;
+
+    if (otCalcCountEl) otCalcCountEl.textContent = `+${totalOtDays.toFixed(1)}`;
+    return totalOtDays;
+}
+
+const otStartPicker = flatpickr("#otStartDate", {
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    maxDate: "today",
+    onChange: function(selectedDates) {
+        otEndPicker.set("minDate", selectedDates[0]);
+        calculateOtDays();
+    }
+});
+
+const otEndPicker = flatpickr("#otEndDate", {
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    maxDate: "today",
+    onChange: function() {
+        calculateOtDays();
+    }
+});
+
+const otDurationEl = document.getElementById('otDuration');
+if (otDurationEl) {
+    otDurationEl.addEventListener('change', calculateOtDays);
+}
+
+if (otForm) {
+    otForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const startStr = document.getElementById('otStartDate').value;
+        const endStr = document.getElementById('otEndDate').value;
+        const durationVal = parseFloat(document.getElementById('otDuration').value) || 1.0;
+        const otReason = document.getElementById('otReason').value;
+
+        if (!startStr || !endStr) {
+            alert('Please select both OT Start Date and End Date.');
+            return;
+        }
+
+        const start = new Date(startStr);
+        const end = new Date(endStr);
+        const totalOtDays = calculateOtDays();
+
+        userData.ot_credit = parseFloat(((userData.ot_credit || 0) + totalOtDays).toFixed(1));
+
+        const dateRangeStr = startStr === endStr
+            ? start.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+            : `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`;
+
+        const typeLabel = durationVal === 0.5 ? 'OT Credit (Half Day)' : 'OT Credit';
+
+        userData.history.unshift({
+            type: typeLabel,
+            dates: dateRangeStr,
+            days: totalOtDays,
+            status: 'Approved',
+            year: start.getFullYear(),
+            reason: otReason
+        });
+
+        updateUI();
+        closeOtModal();
+        otForm.reset();
+        calculateOtDays();
+    });
+}
 
 checkUser();
 

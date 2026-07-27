@@ -323,6 +323,46 @@ header h1 span { color: var(--md-primary); font-weight: 700; }
 
 .btn-primary:active { background: #1558b0; }
 
+.btn-secondary {
+    background: var(--md-surface);
+    color: var(--md-secondary);
+    border: 1px solid var(--md-secondary);
+    padding: 0.6rem 1.25rem;
+    border-radius: 99px;
+    font-weight: 700;
+    font-size: 0.825rem;
+    cursor: pointer;
+    font-family: 'Google Sans', sans-serif;
+    transition: box-shadow 0.2s, background 0.2s, color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.btn-secondary:hover {
+    background: var(--md-secondary-container);
+    box-shadow: var(--elevation-1);
+}
+
+/* ---- DAYS PREVIEW BADGE ---- */
+.days-preview-badge {
+    background: var(--md-primary-container);
+    color: var(--md-primary);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0 0.5rem;
+}
+
+.days-preview-badge.status-ot-preview {
+    background: var(--md-secondary-container);
+    color: var(--md-secondary);
+}
+
 /* ---- TABLE ---- */
 .card-table {
     background: var(--md-surface);
@@ -365,6 +405,10 @@ td { font-size: 0.875rem; color: var(--md-on-surface); }
 .status-pending {
     background: var(--md-warning-container);
     color: #b06000;
+}
+.status-ot {
+    background: var(--md-tertiary-container, #f3e8ff);
+    color: var(--md-tertiary);
 }
 
 /* ---- HOLIDAY CARDS ---- */
