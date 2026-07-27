@@ -347,19 +347,39 @@ async function fetchUserData() {
         }
     } else if (data) {
         console.log("Data loaded from Supabase.");
-        const history = data.leave_history || [];
+        let history = data.leave_history || [];
+
+        // Check if local storage has newer history entries that failed to save to Supabase
+        const localKey = USER_ID ? `aarorntech_userdata_${USER_ID}` : 'aarorntech_userdata_local';
+        const localVal = localStorage.getItem(localKey) || localStorage.getItem('aarorntech_userdata_local');
+        if (localVal) {
+            try {
+                const localParsed = JSON.parse(localVal);
+                if (localParsed.history && localParsed.history.length > history.length) {
+                    console.log("Local storage has newer history entries. Merging local data.");
+                    history = localParsed.history;
+                }
+            } catch (e) {
+                console.warn("Error parsing local backup data:", e);
+            }
+        }
+
         const otFromHistory = history
             .filter(item => item.type && (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')))
+            .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
+
+        const elTakenFromHistory = history
+            .filter(item => item.type && (item.type.includes('Annual Leave') || item.type === 'Earned Leave'))
             .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
 
         userData = {
             joinDate: '2024-03-14', // Hardcoded fix to override corrupted DB join_date
             balances: {
-                mc: parseFloat(data.mc_balance) || defaultData.balances.mc,
-                cl: parseFloat(data.cl_balance) || defaultData.balances.cl
+                mc: data.mc_balance !== undefined ? parseFloat(data.mc_balance) : defaultData.balances.mc,
+                cl: data.cl_balance !== undefined ? parseFloat(data.cl_balance) : defaultData.balances.cl
             },
-            el_taken: parseFloat(data.el_taken) || 0,
-            ot_credit: data.ot_credit !== undefined && !isNaN(parseFloat(data.ot_credit)) ? parseFloat(data.ot_credit) : otFromHistory,
+            el_taken: Math.max(parseFloat(data.el_taken) || 0, elTakenFromHistory),
+            ot_credit: data.ot_credit !== undefined && !isNaN(parseFloat(data.ot_credit)) ? Math.max(parseFloat(data.ot_credit), otFromHistory) : otFromHistory,
             history: history
         };
 
@@ -393,7 +413,9 @@ async function fetchUserData() {
 }
 
 async function saveToSupabase(dataToSave) {
-    // Always persist to localStorage first
+    // Always persist to local storage first under user key and default key
+    const localKey = USER_ID ? `aarorntech_userdata_${USER_ID}` : 'aarorntech_userdata_local';
+    localStorage.setItem(localKey, JSON.stringify(dataToSave));
     localStorage.setItem('aarorntech_userdata_local', JSON.stringify(dataToSave));
 
     if (isOfflineMode || !supabaseClient || !USER_ID) return;
