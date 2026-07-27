@@ -205,6 +205,93 @@ function getLeaveYear(item) {
     return new Date().getFullYear();
 }
 
+// --- Date Formatting Helper (DD/MM/YYYY) ---
+function toDMYStr(d) {
+    if (!d || isNaN(d.getTime())) return '';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
+function formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const str = String(dateStr).trim();
+    
+    // Check if already in DD/MM/YYYY or DD/MM/YYYY - DD/MM/YYYY format
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) {
+        return str;
+    }
+
+    // Range with " - "
+    if (str.includes(' - ')) {
+        const parts = str.split(' - ');
+        const d1 = new Date(parts[0]);
+        const d2 = new Date(parts[1]);
+        if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+            const s1 = toDMYStr(d1);
+            const s2 = toDMYStr(d2);
+            return s1 === s2 ? s1 : `${s1} - ${s2}`;
+        }
+    }
+
+    // Single date parse
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+        return toDMYStr(d);
+    }
+
+    return str;
+}
+
+// --- Medical Leave (MC) Cycle Helper ---
+function getMCCycleInfo() {
+    const joinDate = new Date(userData.joinDate || '2024-03-14');
+    const annivMonth = joinDate.getMonth(); // March (0-indexed: 2)
+    const annivDay = joinDate.getDate(); // 14
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    
+    let cycleStart = new Date(currentYear, annivMonth, annivDay);
+    if (now < cycleStart) {
+        cycleStart = new Date(currentYear - 1, annivMonth, annivDay);
+    }
+    
+    let cycleEnd = new Date(cycleStart.getFullYear() + 1, annivMonth, annivDay - 1, 23, 59, 59);
+    let nextResetDate = new Date(cycleStart.getFullYear() + 1, annivMonth, annivDay);
+    
+    return { cycleStart, cycleEnd, nextResetDate };
+}
+
+function parseLeaveStartDate(item) {
+    if (item.startDate) return new Date(item.startDate);
+    if (item.dates) {
+        const parts = String(item.dates).split(' - ');
+        const dmyMatch = parts[0].match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (dmyMatch) {
+            return new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
+        }
+        const d = new Date(parts[0]);
+        if (!isNaN(d.getTime())) return d;
+    }
+    return new Date();
+}
+
+function getMCRemaining() {
+    const { cycleStart, cycleEnd } = getMCCycleInfo();
+    const mcTakenInCycle = (userData.history || [])
+        .filter(item => {
+            const isMC = item.type && (item.type.includes('Medical Leave') || item.type === 'MC');
+            if (!isMC) return false;
+            const itemDate = parseLeaveStartDate(item);
+            return itemDate >= cycleStart && itemDate <= cycleEnd;
+        })
+        .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
+
+    return Math.max(0, parseFloat((18 - mcTakenInCycle).toFixed(1)));
+}
+
 // --- Carry Forward Calculation ---
 function getCarryForward(year) {
     if (year <= 2025) {
@@ -456,8 +543,17 @@ function updateUI(shouldSave = true) {
     const carryForward = getCarryForward(currentYear);
     const totalForYear = AL_ANNUAL + carryForward;
 
-    if (mcBalanceEl) mcBalanceEl.textContent = userData.balances.mc;
+    const mcRemaining = getMCRemaining();
+    const { nextResetDate } = getMCCycleInfo();
+    const resetDateStr = toDMYStr(nextResetDate);
+
+    if (mcBalanceEl) mcBalanceEl.textContent = mcRemaining;
     if (alBalanceEl) alBalanceEl.textContent = alRemaining;
+
+    const mcTotalLabel = document.getElementById('mc-total-label');
+    if (mcTotalLabel) {
+        mcTotalLabel.textContent = `Days remaining / 18 total (Resets ${resetDateStr})`;
+    }
 
     const alTotalLabel = document.getElementById('al-total-label');
     if (alTotalLabel) {
@@ -477,10 +573,11 @@ function updateUI(shouldSave = true) {
             const isOT = item.type ? (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')) : false;
             const statusClass = isOT ? 'status-ot' : `status-${(item.status || 'Approved').toLowerCase()}`;
             const daysText = isOT ? `+${item.days.toFixed(1)}` : item.days.toFixed(1);
+            const displayDates = formatDisplayDate(item.dates);
             return `
             <tr>
                 <td>${item.type === 'Earned Leave' ? 'Annual Leave' : item.type}</td>
-                <td>${item.dates}</td>
+                <td>${displayDates}</td>
                 <td>${daysText}</td>
                 <td>
                     <span class="status-badge ${statusClass}">${isOT ? 'Credited' : item.status}</span>
@@ -504,8 +601,6 @@ async function deleteLeave(index) {
         userData.ot_credit = Math.max(0, parseFloat(((userData.ot_credit || 0) - item.days).toFixed(1)));
     } else if (item.type.includes('Annual Leave') || item.type === 'Earned Leave') {
         userData.el_taken = Math.max(0, parseFloat(((userData.el_taken || 0) - item.days).toFixed(1)));
-    } else if (item.type.includes('Medical Leave')) {
-        userData.balances.mc += item.days;
     }
     userData.history.splice(index, 1);
     updateUI();
@@ -601,22 +696,27 @@ leaveForm.addEventListener('submit', (e) => {
             return;
         }
     } else if (type === 'MC') {
-        if (userData.balances.mc >= calcDays) {
-            userData.balances.mc -= calcDays;
+        const remainingMC = getMCRemaining();
+        if (remainingMC >= calcDays) {
+            // MC balance is calculated dynamically from history
         } else {
-            alert(`Insufficient MC! You have ${userData.balances.mc} days remaining.`);
+            alert(`Insufficient MC! You have ${remainingMC} days remaining.`);
             return;
         }
     }
 
+    const dateRangeStr = startStr === endStr 
+        ? toDMYStr(start)
+        : `${toDMYStr(start)} - ${toDMYStr(end)}`;
+
     userData.history.unshift({
         type: typeTitle,
-        dates: startStr === endStr 
-            ? start.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
-            : `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`,
+        dates: dateRangeStr,
         days: calcDays,
         status: 'Approved',
-        year: start.getFullYear()
+        year: start.getFullYear(),
+        startDate: startStr,
+        endDate: endStr
     });
 
     updateUI();
@@ -741,8 +841,8 @@ if (otForm) {
         userData.ot_credit = parseFloat(((userData.ot_credit || 0) + totalOtDays).toFixed(1));
 
         const dateRangeStr = startStr === endStr
-            ? start.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
-            : `${start.toLocaleDateString('en-US', {month:'short', day:'numeric'})} - ${end.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})}`;
+            ? toDMYStr(start)
+            : `${toDMYStr(start)} - ${toDMYStr(end)}`;
 
         const typeLabel = durationVal === 0.5 ? 'OT Credit (Half Day)' : 'OT Credit';
 
@@ -752,7 +852,9 @@ if (otForm) {
             days: totalOtDays,
             status: 'Approved',
             year: start.getFullYear(),
-            reason: otReason
+            reason: otReason,
+            startDate: startStr,
+            endDate: endStr
         });
 
         updateUI();
