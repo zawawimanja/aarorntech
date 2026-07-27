@@ -426,8 +426,8 @@ function updateUI(shouldSave = true) {
 
     if (historyBody) {
         historyBody.innerHTML = userData.history.map((item, index) => {
-            const isOT = item.type === 'OT Credit' || item.type === 'Overtime (OT)';
-            const statusClass = isOT ? 'status-ot' : `status-${item.status.toLowerCase()}`;
+            const isOT = item.type ? (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')) : false;
+            const statusClass = isOT ? 'status-ot' : `status-${(item.status || 'Approved').toLowerCase()}`;
             const daysText = isOT ? `+${item.days.toFixed(1)}` : item.days.toFixed(1);
             return `
             <tr>
@@ -451,7 +451,8 @@ function updateUI(shouldSave = true) {
 async function deleteLeave(index) {
     if (!confirm('Delete this entry and adjust balance?')) return;
     const item = userData.history[index];
-    if (item.type === 'OT Credit' || item.type === 'Overtime (OT)') {
+    const isOT = item.type ? (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')) : false;
+    if (isOT) {
         userData.ot_credit = Math.max(0, parseFloat(((userData.ot_credit || 0) - item.days).toFixed(1)));
     } else if (item.type.includes('Annual Leave') || item.type === 'Earned Leave') {
         userData.el_taken = Math.max(0, parseFloat(((userData.el_taken || 0) - item.days).toFixed(1)));
@@ -578,7 +579,14 @@ leaveForm.addEventListener('submit', (e) => {
 
 function openModal() { leaveModal.style.display = 'flex'; }
 function closeModal() { leaveModal.style.display = 'none'; }
-function openOtModal() { if (otModal) otModal.style.display = 'flex'; }
+function openOtModal() { 
+    if (otModal) {
+        otModal.style.display = 'flex'; 
+        if (typeof otStartPicker !== 'undefined') otStartPicker.clear();
+        if (typeof otEndPicker !== 'undefined') otEndPicker.clear();
+        calculateOtDays();
+    }
+}
 function closeOtModal() { if (otModal) otModal.style.display = 'none'; }
 
 window.onclick = (e) => { 
@@ -656,14 +664,22 @@ if (otDurationEl) {
 if (otForm) {
     otForm.addEventListener('submit', (e) => {
         e.preventDefault();
-        const startStr = document.getElementById('otStartDate').value;
-        const endStr = document.getElementById('otEndDate').value;
+        let startStr = document.getElementById('otStartDate').value;
+        let endStr = document.getElementById('otEndDate').value;
         const durationVal = parseFloat(document.getElementById('otDuration').value) || 1.0;
         const otReason = document.getElementById('otReason').value;
 
-        if (!startStr || !endStr) {
-            alert('Please select both OT Start Date and End Date.');
+        if (!startStr && !endStr) {
+            alert('Please select the OT date worked.');
             return;
+        }
+
+        if (startStr && !endStr) {
+            endStr = startStr;
+            document.getElementById('otEndDate').value = startStr;
+        } else if (!startStr && endStr) {
+            startStr = endStr;
+            document.getElementById('otStartDate').value = endStr;
         }
 
         const start = new Date(startStr);
