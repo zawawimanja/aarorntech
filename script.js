@@ -595,16 +595,18 @@ window.onclick = (e) => {
 }
 
 // Initialize Flatpickr date pickers
-const startPicker = flatpickr("#startDate", {
+let startPicker, endPicker, otStartPicker, otEndPicker;
+
+startPicker = flatpickr("#startDate", {
     dateFormat: "Y-m-d",
     disableMobile: true,
     onChange: function(selectedDates) {
-        endPicker.set("minDate", selectedDates[0]);
+        if (endPicker) endPicker.set("minDate", selectedDates[0]);
         calculateLeaveDays();
     }
 });
 
-const endPicker = flatpickr("#endDate", {
+endPicker = flatpickr("#endDate", {
     dateFormat: "Y-m-d",
     disableMobile: true,
     onChange: function() {
@@ -618,8 +620,10 @@ if (leaveDurationEl) {
 }
 
 function calculateOtDays() {
-    const startStr = document.getElementById('otStartDate').value;
-    const endStr = document.getElementById('otEndDate').value;
+    const startEl = document.getElementById('otStartDate');
+    const endEl = document.getElementById('otEndDate');
+    const startStr = startEl ? startEl.value : '';
+    const endStr = endEl ? endEl.value : '';
     const durationVal = parseFloat(document.getElementById('otDuration').value) || 1.0;
     const otCalcCountEl = document.getElementById('otCalcCount');
 
@@ -637,17 +641,17 @@ function calculateOtDays() {
     return totalOtDays;
 }
 
-const otStartPicker = flatpickr("#otStartDate", {
+otStartPicker = flatpickr("#otStartDate", {
     dateFormat: "Y-m-d",
     disableMobile: true,
     maxDate: "today",
     onChange: function(selectedDates) {
-        otEndPicker.set("minDate", selectedDates[0]);
+        if (otEndPicker) otEndPicker.set("minDate", selectedDates[0]);
         calculateOtDays();
     }
 });
 
-const otEndPicker = flatpickr("#otEndDate", {
+otEndPicker = flatpickr("#otEndDate", {
     dateFormat: "Y-m-d",
     disableMobile: true,
     maxDate: "today",
