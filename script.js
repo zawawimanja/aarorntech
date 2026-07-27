@@ -278,7 +278,13 @@ async function fetchUserData() {
         if (localVal) {
             try {
                 userData = JSON.parse(localVal);
-                if (userData.ot_credit === undefined) userData.ot_credit = 0;
+                const history = userData.history || [];
+                const otFromHistory = history
+                    .filter(item => item.type && (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')))
+                    .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
+                if (userData.ot_credit === undefined) {
+                    userData.ot_credit = otFromHistory;
+                }
                 console.log("Data loaded from local storage successfully.");
             } catch (e) {
                 console.error("Failed to parse local storage data, using defaults:", e);
@@ -315,6 +321,11 @@ async function fetchUserData() {
 
             if (!oldError && oldData) {
                 console.log("Migrating legacy data...");
+                const oldHistory = oldData.leave_history || [];
+                const otFromHist = oldHistory
+                    .filter(item => item.type && (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')))
+                    .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
+
                 userData = {
                     joinDate: oldData.join_date || defaultData.joinDate,
                     balances: {
@@ -322,8 +333,8 @@ async function fetchUserData() {
                         cl: parseFloat(oldData.cl_balance) || defaultData.balances.cl
                     },
                     el_taken: parseFloat(oldData.el_taken) || 0,
-                    ot_credit: parseFloat(oldData.ot_credit) || 0,
-                    history: oldData.leave_history || []
+                    ot_credit: parseFloat(oldData.ot_credit) || otFromHist,
+                    history: oldHistory
                 };
                 await saveToSupabase(userData);
             } else {
@@ -336,6 +347,11 @@ async function fetchUserData() {
         }
     } else if (data) {
         console.log("Data loaded from Supabase.");
+        const history = data.leave_history || [];
+        const otFromHistory = history
+            .filter(item => item.type && (item.type.includes('OT Credit') || item.type.includes('Overtime') || item.type.includes('OT')))
+            .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
+
         userData = {
             joinDate: '2024-03-14', // Hardcoded fix to override corrupted DB join_date
             balances: {
@@ -343,8 +359,8 @@ async function fetchUserData() {
                 cl: parseFloat(data.cl_balance) || defaultData.balances.cl
             },
             el_taken: parseFloat(data.el_taken) || 0,
-            ot_credit: parseFloat(data.ot_credit) || 0,
-            history: data.leave_history || []
+            ot_credit: data.ot_credit !== undefined && !isNaN(parseFloat(data.ot_credit)) ? parseFloat(data.ot_credit) : otFromHistory,
+            history: history
         };
 
         // Special Fix: If user was accidentally seeded with MC 14 and has no history, 
@@ -377,26 +393,36 @@ async function fetchUserData() {
 }
 
 async function saveToSupabase(dataToSave) {
-    if (isOfflineMode) {
-        console.log("Saving data to local storage (Offline Mode).");
-        localStorage.setItem('aarorntech_userdata_local', JSON.stringify(dataToSave));
-        return;
-    }
+    // Always persist to localStorage first
+    localStorage.setItem('aarorntech_userdata_local', JSON.stringify(dataToSave));
 
-    if (!supabaseClient || !USER_ID) return;
+    if (isOfflineMode || !supabaseClient || !USER_ID) return;
     try {
+        const payload = {
+            id: USER_ID,
+            join_date: dataToSave.joinDate,
+            mc_balance: dataToSave.balances.mc,
+            cl_balance: dataToSave.balances.cl,
+            el_taken: dataToSave.el_taken || 0,
+            leave_history: dataToSave.history
+        };
+
+        if (dataToSave.ot_credit !== undefined) {
+            payload.ot_credit = dataToSave.ot_credit;
+        }
+
         const { error } = await supabaseClient
             .from('profiles')
-            .upsert({
-                id: USER_ID,
-                join_date: dataToSave.joinDate,
-                mc_balance: dataToSave.balances.mc,
-                cl_balance: dataToSave.balances.cl,
-                el_taken: dataToSave.el_taken || 0,
-                ot_credit: dataToSave.ot_credit || 0,
-                leave_history: dataToSave.history
-            });
-        if (error) console.error("Save failed:", error);
+            .upsert(payload);
+
+        if (error) {
+            console.warn("Supabase Save Warning (retrying without ot_credit column):", error);
+            delete payload.ot_credit;
+            const { error: retryError } = await supabaseClient
+                .from('profiles')
+                .upsert(payload);
+            if (retryError) console.error("Supabase retry save failed:", retryError);
+        }
     } catch (e) {
         console.error("Save failed due to network error:", e);
     }
