@@ -266,15 +266,29 @@ function getMCCycleInfo() {
 
 function parseLeaveStartDate(item) {
     if (item.startDate) return new Date(item.startDate);
-    if (item.dates) {
-        const parts = String(item.dates).split(' - ');
-        const dmyMatch = parts[0].match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-        if (dmyMatch) {
-            return new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
-        }
-        const d = new Date(parts[0]);
-        if (!isNaN(d.getTime())) return d;
+    if (!item.dates) return new Date();
+
+    const str = String(item.dates).trim();
+
+    // Check if DD/MM/YYYY
+    const dmyMatch = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (dmyMatch) {
+        return new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
     }
+
+    // Extract year from string if present (e.g. 2026) or item.year
+    const yearMatch = str.match(/(\d{4})/);
+    const itemYear = item.year || (yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear());
+
+    // If range e.g. "Jul 7 - Jul 7, 2026"
+    let datePart = str.includes(' - ') ? str.split(' - ')[0] : str;
+    if (!/\d{4}/.test(datePart)) {
+        datePart = `${datePart}, ${itemYear}`;
+    }
+
+    const d = new Date(datePart);
+    if (!isNaN(d.getTime())) return d;
+
     return new Date();
 }
 
@@ -324,9 +338,14 @@ function getALRemaining() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const earned = calculateALEarned();
-    const takenInCurrentYear = userData.history
-        .filter(item => (item.type.includes('Annual Leave') || item.type === 'Earned Leave') && getLeaveYear(item) === currentYear)
-        .reduce((sum, item) => sum + item.days, 0);
+    const takenInCurrentYear = (userData.history || [])
+        .filter(item => {
+            const isAL = item.type && (item.type.includes('Annual Leave') || item.type === 'Earned Leave');
+            if (!isAL) return false;
+            const itemDate = parseLeaveStartDate(item);
+            return itemDate.getFullYear() === currentYear;
+        })
+        .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
     const otCredit = userData.ot_credit || 0;
     const remaining = parseFloat((earned + otCredit - takenInCurrentYear).toFixed(1));
     return Math.max(remaining, 0);
