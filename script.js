@@ -216,18 +216,20 @@ function toDMYStr(d) {
 
 function formatDisplayDate(dateStr) {
     if (!dateStr) return '';
-    const str = String(dateStr).trim();
+    let str = String(dateStr).trim();
+    // Normalize 2001 to 2026 if present due to date parsing bug
+    str = str.replace(/\/2001\b/g, '/2026').replace(/\b2001\b/g, '2026');
     
-    // Check if already in DD/MM/YYYY or DD/MM/YYYY - DD/MM/YYYY format
-    if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(str)) {
+    // Check if already in DD/MM/YYYY format without range
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(str)) {
         return str;
     }
 
     // Range with " - "
     if (str.includes(' - ')) {
         const parts = str.split(' - ');
-        const d1 = new Date(parts[0]);
-        const d2 = new Date(parts[1]);
+        const d1 = parseLeaveStartDate({ dates: parts[0] });
+        const d2 = parseLeaveStartDate({ dates: parts[1] });
         if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
             const s1 = toDMYStr(d1);
             const s2 = toDMYStr(d2);
@@ -235,8 +237,7 @@ function formatDisplayDate(dateStr) {
         }
     }
 
-    // Single date parse
-    const d = new Date(str);
+    const d = parseLeaveStartDate({ dates: str });
     if (!isNaN(d.getTime())) {
         return toDMYStr(d);
     }
@@ -244,7 +245,7 @@ function formatDisplayDate(dateStr) {
     return str;
 }
 
-// --- Medical Leave (MC) Cycle Helper ---
+// --- Medical Leave (MC) & Annual Leave (AL) Cycle Helpers ---
 function getMCCycleInfo() {
     const joinDate = new Date(userData.joinDate || '2024-03-14');
     const annivMonth = joinDate.getMonth(); // March (0-indexed: 2)
@@ -264,30 +265,46 @@ function getMCCycleInfo() {
     return { cycleStart, cycleEnd, nextResetDate };
 }
 
+function getALContractCycleInfo() {
+    return getMCCycleInfo();
+}
+
 function parseLeaveStartDate(item) {
-    if (item.startDate) return new Date(item.startDate);
+    if (item.startDate) {
+        let d = new Date(item.startDate);
+        if (!isNaN(d.getTime())) {
+            if (d.getFullYear() < 2020) d.setFullYear(2026);
+            return d;
+        }
+    }
     if (!item.dates) return new Date();
 
-    const str = String(item.dates).trim();
+    let str = String(item.dates).trim();
+    str = str.replace(/\/2001\b/g, '/2026').replace(/\b2001\b/g, '2026');
 
-    // Check if DD/MM/YYYY
-    const dmyMatch = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    // Check if DD/MM/YYYY or DD/MM/YYYY - ...
+    const dmyMatch = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
     if (dmyMatch) {
-        return new Date(parseInt(dmyMatch[3]), parseInt(dmyMatch[2]) - 1, parseInt(dmyMatch[1]));
+        let year = parseInt(dmyMatch[3], 10);
+        if (year < 100) year += 2000;
+        if (year < 2020) year = 2026;
+        return new Date(year, parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
     }
 
-    // Extract year from string if present (e.g. 2026) or item.year
     const yearMatch = str.match(/(\d{4})/);
-    const itemYear = item.year || (yearMatch ? parseInt(yearMatch[1]) : new Date().getFullYear());
+    let itemYear = item.year || (yearMatch ? parseInt(yearMatch[1], 10) : new Date().getFullYear());
+    if (itemYear < 2020) itemYear = 2026;
 
-    // If range e.g. "Jul 7 - Jul 7, 2026"
     let datePart = str.includes(' - ') ? str.split(' - ')[0] : str;
     if (!/\d{4}/.test(datePart)) {
         datePart = `${datePart}, ${itemYear}`;
     }
 
-    const d = new Date(datePart);
-    if (!isNaN(d.getTime())) return d;
+    let d = new Date(datePart);
+    if (!isNaN(d.getTime())) {
+        if (d.getFullYear() < 2020) d.setFullYear(itemYear);
+        return d;
+    }
 
     return new Date();
 }
@@ -312,7 +329,7 @@ function getCarryForward(year) {
         return 0;
     }
     if (year === 2026) {
-        return 4; // Hardcoded carry-forward for 2026
+        return 3.5; // Carry-forward for 2026 contract cycle per HR record
     }
     const prevYear = year - 1;
     const prevAccrued = 12;
@@ -324,30 +341,37 @@ function getCarryForward(year) {
     return Math.max(0, parseFloat(prevRemaining.toFixed(1)));
 }
 
-// --- Auto AL Accrual ---
+// --- Auto AL Accrual (Contract Anniversary Cycle: March - March) ---
 function calculateALEarned() {
+    const { cycleStart } = getALContractCycleInfo();
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const monthsCompleted = now.getMonth();
-    const partial = now.getDate() >= 15 ? 1.0 : 0.5;
-    const carryForward = getCarryForward(currentYear);
-    return Math.min(monthsCompleted + partial, AL_ANNUAL) + carryForward;
+    
+    // Calculate calendar months elapsed since contract anniversary (March 14)
+    let monthsElapsed = (now.getFullYear() - cycleStart.getFullYear()) * 12 + (now.getMonth() - cycleStart.getMonth());
+    if (now.getDate() >= cycleStart.getDate()) {
+        monthsElapsed += 1;
+    } else if (now.getDate() >= 15) {
+        monthsElapsed += 0.5;
+    }
+    
+    const earnedThisCycle = Math.min(Math.max(0, monthsElapsed), AL_ANNUAL);
+    const carryForward = getCarryForward(cycleStart.getFullYear());
+    return earnedThisCycle + carryForward;
 }
 
 function getALRemaining() {
-    const now = new Date();
-    const currentYear = now.getFullYear();
+    const { cycleStart, cycleEnd } = getALContractCycleInfo();
     const earned = calculateALEarned();
-    const takenInCurrentYear = (userData.history || [])
+    const takenInCycle = (userData.history || [])
         .filter(item => {
             const isAL = item.type && (item.type.includes('Annual Leave') || item.type === 'Earned Leave');
             if (!isAL) return false;
             const itemDate = parseLeaveStartDate(item);
-            return itemDate.getFullYear() === currentYear;
+            return itemDate >= cycleStart && itemDate <= cycleEnd;
         })
         .reduce((sum, item) => sum + (parseFloat(item.days) || 0), 0);
     const otCredit = userData.ot_credit || 0;
-    const remaining = parseFloat((earned + otCredit - takenInCurrentYear).toFixed(1));
+    const remaining = parseFloat((earned + otCredit - takenInCycle).toFixed(1));
     return Math.max(remaining, 0);
 }
 
